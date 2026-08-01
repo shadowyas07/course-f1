@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Manette</title>
+  <link rel="stylesheet" href="css/controller.css" />
+</head>
+<body>
+
+  <!-- Décor asphalte/circuit stylisé, purement visuel (généré en CSS/SVG) -->
+  <div id="track-background" aria-hidden="true"></div>
+
+  <!-- Affiché uniquement en portrait -->
+  <div id="rotate-overlay">
+    <div class="rotate-icon">📱↻</div>
+    <p>Tourne ton téléphone en mode paysage</p>
+  </div>
+
+  <!-- Écran de statut avant que la room soit rejointe -->
+  <div id="start-screen" class="screen">
+    <p id="start-status">Connexion à la room...</p>
+    <p id="start-error" class="error hidden"></p>
+  </div>
+
+  <!-- Manette -->
+  <div id="controller-screen" class="screen hidden">
+
+    <!-- Barre de statut supérieure -->
+    <div id="top-bar">
+      <button id="pause-btn" class="icon-btn" aria-label="Pause">
+        <svg viewBox="0 0 24 24" width="22" height="22"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+        <span class="icon-btn-label">PAUSE</span>
+      </button>
+
+      <div id="top-bar-info">
+        <p id="room-line">Room : <span id="room-id-display">—</span> <span id="player-badge" class="player-badge">J1</span></p>
+        <p id="status-line" class="status-waiting">🟡 CONNEXION...</p>
+      </div>
+    </div>
+
+    <!-- Volant -->
+    <div id="wheel-zone">
+      <p id="wheel-hint">◄ TOURNER ►</p>
+      <div id="wheel">
+        <div id="wheel-grip"></div>
+        <div id="wheel-hub">
+          <svg viewBox="0 0 24 24" width="30" height="30">
+            <path fill="currentColor" d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h1zm2.1 0h9.8l-1-3H8.1l-1 3zM6.5 14a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm11 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Boutons GAZ / FREIN -->
+    <div id="pedals">
+      <button id="brake-btn" class="control-btn brake-btn">
+        <svg class="btn-icon" viewBox="0 0 24 24" width="26" height="26">
+          <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
+          <circle cx="12" cy="12" r="3" fill="currentColor"/>
+          <line x1="12" y1="3" x2="12" y2="7" stroke="currentColor" stroke-width="2"/>
+          <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2"/>
+          <line x1="3" y1="12" x2="7" y2="12" stroke="currentColor" stroke-width="2"/>
+          <line x1="17" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span class="btn-label">FREIN<br/>ARRÊT</span>
+      </button>
+
+      <button id="gas-btn" class="control-btn gas-btn">
+        <svg class="btn-icon" viewBox="0 0 24 24" width="26" height="26">
+          <path fill="currentColor" d="M12 3l7 8h-4v10h-6V11H5l7-8z"/>
+        </svg>
+        <span class="btn-label">GAZ<br/>ACCÉL</span>
+      </button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/controller.js"></script>
+</body>
+</html>

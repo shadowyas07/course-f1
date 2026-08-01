@@ -1,0 +1,17 @@
+{
+  "name": "car-game-remote-controller",
+  "version": "1.0.0",
+  "description": "Jeu de course 3D (PC) controlé par smartphone via gyroscope, sur reseau local",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js",
+    "postinstall": "node scripts/copy-vendor.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5",
+    "three": "^0.185.1"
+  }
+}

@@ -1,0 +1,389 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #06060c;
+  color: #f2f2f2;
+  font-family: "Segoe UI", Arial, sans-serif;
+  overscroll-behavior: none;
+  position: fixed;
+  touch-action: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ============================================================
+   Décor asphalte / circuit stylisé (100% CSS, aucune image externe)
+   ============================================================ */
+#track-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    /* grain d'asphalte */
+    repeating-linear-gradient(115deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 2px, transparent 6px),
+    /* vignette */
+    radial-gradient(ellipse at 30% 40%, rgba(79,209,197,0.10), transparent 55%),
+    radial-gradient(ellipse at 80% 80%, rgba(255,107,107,0.08), transparent 50%),
+    linear-gradient(160deg, #14141f 0%, #0a0a12 55%, #060609 100%);
+}
+
+/* Bande de "route" en diagonale avec ligne médiane pointillée cyan */
+#track-background::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 140%;
+  height: 60%;
+  background: linear-gradient(100deg, transparent 0%, #1c1c2a 20%, #23233a 50%, #1c1c2a 80%, transparent 100%);
+  transform: rotate(-8deg);
+  opacity: 0.6;
+}
+
+#track-background::after {
+  content: "";
+  position: absolute;
+  top: 12%;
+  left: -10%;
+  width: 140%;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #4fd1c5 0px, #4fd1c5 24px, transparent 24px, transparent 48px);
+  transform: rotate(-8deg);
+  opacity: 0.35;
+}
+
+/* ============================================================
+   Écrans généraux
+   ============================================================ */
+.screen {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+
+#rotate-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: #06060c;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.rotate-icon {
+  font-size: 3rem;
+  animation: rotate-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
+@media (orientation: portrait) {
+  #rotate-overlay { display: flex; }
+  #start-screen, #controller-screen { display: none !important; }
+}
+
+#start-status {
+  font-size: 1.15rem;
+  color: #a0a0b8;
+}
+
+.error {
+  margin-top: 20px;
+  color: #ff6b6b;
+  font-size: 0.95rem;
+  max-width: 320px;
+}
+
+/* ============================================================
+   Écran manette
+   ============================================================ */
+#controller-screen {
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 18px;
+  gap: 10px;
+}
+
+/* --- Barre de statut --- */
+#top-bar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.icon-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: rgba(79, 209, 197, 0.08);
+  border: 1px solid rgba(79, 209, 197, 0.4);
+  color: #4fd1c5;
+  border-radius: 12px;
+  padding: 6px 10px;
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn-label {
+  font-size: 0.6rem;
+  letter-spacing: 1px;
+}
+
+#top-bar-info {
+  text-align: right;
+}
+
+#room-line {
+  font-size: 0.8rem;
+  color: #8888a8;
+  letter-spacing: 1px;
+}
+
+#room-id-display {
+  color: #4fd1c5;
+  font-weight: bold;
+}
+
+.player-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-weight: 800;
+  font-size: 0.75rem;
+}
+
+.player-badge.player-1 {
+  background: rgba(255, 59, 59, 0.18);
+  color: #ff5c5c;
+}
+
+.player-badge.player-2 {
+  background: rgba(59, 140, 255, 0.18);
+  color: #4fa3ff;
+}
+
+#status-line {
+  font-size: 0.85rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.status-waiting { color: #ffc400; }
+.status-connected { color: #4fd1c5; }
+.status-error { color: #ff6b6b; }
+
+/* --- Zone centrale : volant + pédales --- */
+#controller-screen > #wheel-zone,
+#controller-screen > #pedals {
+  flex: 1;
+}
+
+/* On réorganise en ligne pour occuper toute la largeur en paysage */
+#controller-screen {
+  display: flex;
+}
+#controller-screen #top-bar {
+  order: 1;
+}
+
+/* Container flex row pour wheel + pedals côte à côte */
+#controller-screen::after {
+  content: none;
+}
+
+#wheel-zone {
+  order: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+}
+
+#wheel-hint {
+  color: #4fd1c5;
+  font-size: 0.85rem;
+  letter-spacing: 3px;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+#wheel-hint.faded {
+  opacity: 0;
+}
+
+#wheel {
+  width: min(58vh, 40vw);
+  height: min(58vh, 40vw);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #23233a, #101018 70%);
+  border: 12px solid #2a2a42;
+  position: relative;
+  box-shadow:
+    0 0 0 3px #06060c,
+    0 0 24px rgba(79, 209, 197, 0.35),
+    inset 0 0 20px rgba(0,0,0,0.6);
+  touch-action: none;
+}
+
+#wheel::before,
+#wheel::after {
+  content: "";
+  position: absolute;
+  background: linear-gradient(90deg, #2a2a42, #383858 50%, #2a2a42);
+  box-shadow: 0 0 10px rgba(79, 209, 197, 0.25) inset;
+}
+
+#wheel::before {
+  left: 10%;
+  right: 10%;
+  top: 50%;
+  height: 16px;
+  transform: translateY(-50%);
+  border-radius: 8px;
+}
+
+#wheel::after {
+  top: 10%;
+  bottom: 50%;
+  left: 50%;
+  width: 16px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+}
+
+#wheel-grip {
+  position: absolute;
+  inset: 0;
+}
+
+#wheel-grip::before {
+  content: "";
+  position: absolute;
+  top: 3%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: #4fd1c5;
+  box-shadow: 0 0 14px rgba(79, 209, 197, 0.8);
+}
+
+#wheel-hub {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 34%;
+  height: 34%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #383858, #1a1a2c);
+  border: 3px solid #4fd1c5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #4fd1c5;
+  box-shadow: 0 0 16px rgba(79, 209, 197, 0.5);
+}
+
+/* --- Pédales GAZ / FREIN --- */
+#pedals {
+  order: 3;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  flex: 0 0 130px;
+}
+
+.control-btn {
+  flex: 1;
+  max-height: 140px;
+  border: none;
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+
+.brake-btn {
+  background: linear-gradient(160deg, #ff6b6b, #b93a2f);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(255, 107, 107, 0.35);
+}
+
+.gas-btn {
+  background: linear-gradient(160deg, #4fd1c5, #1f9d8f);
+  color: #06231f;
+  box-shadow: 0 6px 18px rgba(79, 209, 197, 0.35);
+}
+
+.control-btn.active {
+  transform: scale(0.94);
+  filter: brightness(1.15);
+}
+
+.btn-label {
+  pointer-events: none;
+  line-height: 1.2;
+}
+
+.btn-icon {
+  pointer-events: none;
+}
+
+/* En paysage large, on remet wheel-zone et pedals côte à côte proprement */
+@media (orientation: landscape) {
+  #controller-screen {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  #top-bar {
+    width: 100%;
+    order: 1;
+  }
+  #wheel-zone {
+    order: 2;
+  }
+  #pedals {
+    order: 3;
+    flex-direction: row;
+  }
+}

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <title>Course 3D - 1 vs 1</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="lobby-screen" class="screen">
+    <h1>🏎️ Course 3D — 1 vs 1</h1>
+    <p class="subtitle">Chaque joueur scanne son QR code avec son smartphone (même réseau Wi-Fi)</p>
+
+    <div id="players-row">
+      <div class="player-card player-card-1">
+        <h2>Joueur 1</h2>
+        <div class="qr-container"><img id="qr-code-1" src="" alt="QR Code joueur 1" /></div>
+        <p id="status-1" class="status waiting">⏳ En attente...</p>
+      </div>
+      <div class="player-card player-card-2">
+        <h2>Joueur 2</h2>
+        <div class="qr-container"><img id="qr-code-2" src="" alt="QR Code joueur 2" /></div>
+        <p id="status-2" class="status waiting">⏳ En attente...</p>
+      </div>
+    </div>
+
+    <p id="room-code">Room : <span id="room-id">...</span></p>
+
+    <div id="race-settings">
+      <div class="settings-group">
+        <span class="settings-label">Nombre de tours</span>
+        <div class="settings-options">
+          <label><input type="radio" name="laps" value="3" checked /> 3</label>
+          <label><input type="radio" name="laps" value="5" /> 5</label>
+          <label><input type="radio" name="laps" value="8" /> 8</label>
+        </div>
+      </div>
+      <div class="settings-group">
+        <span class="settings-label">Limites de terrain</span>
+        <div class="settings-options">
+          <label><input type="radio" name="wall-mode" value="grass" checked /> 🌱 Herbe (ralentit)</label>
+          <label><input type="radio" name="wall-mode" value="wall" /> 🧱 Mur (bloque)</label>
+        </div>
+      </div>
+    </div>
+
+    <button id="start-race-btn" disabled>En attente des 2 joueurs...</button>
+  </div>
+
+  <div id="game-screen" class="screen hidden">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="split-divider"></div>
+
+    <div id="hud-1" class="hud hud-left">
+      <div class="hud-player-tag hud-tag-1">JOUEUR 1</div>
+      <div class="hud-speed-block">
+        <span id="hud-speed-1">0</span><span class="hud-unit">km/h</span>
+      </div>
+      <div class="hud-lap-block">
+        <span class="hud-label">TOUR</span><span id="hud-lap-1">1/3</span>
+      </div>
+      <div class="hud-time-block">
+        <span class="hud-label">TEMPS</span><span id="hud-time-1">0:00.000</span>
+        <span class="hud-label">MEILLEUR</span><span id="hud-best-1">--:--.---</span>
+      </div>
+    </div>
+
+    <div id="hud-2" class="hud hud-right">
+      <div class="hud-player-tag hud-tag-2">JOUEUR 2</div>
+      <div class="hud-speed-block">
+        <span id="hud-speed-2">0</span><span class="hud-unit">km/h</span>
+      </div>
+      <div class="hud-lap-block">
+        <span class="hud-label">TOUR</span><span id="hud-lap-2">1/3</span>
+      </div>
+      <div class="hud-time-block">
+        <span class="hud-label">TEMPS</span><span id="hud-time-2">0:00.000</span>
+        <span class="hud-label">MEILLEUR</span><span id="hud-best-2">--:--.---</span>
+      </div>
+    </div>
+
+    <canvas id="minimap" width="150" height="150"></canvas>
+
+    <div id="countdown" class="hidden">3</div>
+
+    <div id="finish-screen" class="hidden">
+      <h2 id="finish-title">🏁 Victoire !</h2>
+      <p id="finish-detail"></p>
+      <button id="rematch-btn">Rejouer</button>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/network.js"></script>
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
