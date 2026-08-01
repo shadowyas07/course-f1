@@ -39,10 +39,19 @@ function setServerStatus(message, kind = "info") {
 }
 
 function refreshStartButton() {
-  const ready = window.carControls1.connected && window.carControls2.connected;
+  const mode = window.selectedMode || "duel";
+  const isSolo = mode === "solo-timed" || mode === "solo-free";
+  const ready = isSolo ? window.carControls1.connected : window.carControls1.connected && window.carControls2.connected;
   startBtn.disabled = !ready;
-  startBtn.textContent = ready ? "🏁 Lancer la course" : "En attente des 2 joueurs...";
+
+  if (ready) {
+    const config = typeof window.getSelectedModeConfig === "function" ? window.getSelectedModeConfig(mode) : null;
+    startBtn.textContent = config ? config.buttonLabel : "🏁 Lancer la course";
+  } else {
+    startBtn.textContent = isSolo ? "En attente du pilote…" : "En attente des 2 joueurs...";
+  }
 }
+window.refreshStartButton = refreshStartButton;
 
 socket.on("connect", () => {
   console.log("[network] Connecté au serveur, id =", socket.id);
@@ -75,6 +84,8 @@ socket.on("player-joined", ({ player }) => {
   setServerStatus(`🟢 Joueur ${player} prêt`, "connected");
   refreshStartButton();
 });
+
+document.addEventListener("mode-changed", refreshStartButton);
 
 socket.on("player-left", ({ player }) => {
   const controls = player === 2 ? window.carControls2 : window.carControls1;

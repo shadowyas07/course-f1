@@ -75,6 +75,97 @@ body {
   display: none !important;
 }
 
+.boot-screen {
+  background:
+    radial-gradient(circle at top left, rgba(255, 201, 60, 0.18), transparent 32%),
+    linear-gradient(135deg, rgba(7, 8, 11, 0.97), rgba(16, 18, 25, 0.96));
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+
+.boot-screen.is-transitioning {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.985);
+  pointer-events: none;
+}
+
+.boot-card {
+  width: min(640px, 100%);
+  padding: 40px 36px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(18px);
+}
+
+.boot-card h1 {
+  margin-bottom: 10px;
+}
+
+.loading-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 24px 0 18px;
+}
+
+.loading-fill {
+  display: block;
+  height: 100%;
+  width: 45%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--pit-yellow), var(--flag-green));
+  animation: loading-fill 1.35s ease-in-out infinite alternate;
+}
+
+@keyframes loading-fill {
+  from { width: 18%; transform: translateX(-4%); }
+  to { width: 92%; transform: translateX(4%); }
+}
+
+.boot-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+#enter-lobby-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-utility);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, var(--pit-yellow), #ff7a00);
+  color: #241a02;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 10px 24px rgba(255, 201, 60, 0.24);
+}
+
+#enter-lobby-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px rgba(255, 201, 60, 0.34);
+}
+
+.boot-hint {
+  color: var(--slate);
+  font-size: 0.92rem;
+}
+
+#lobby-screen.is-ready {
+  animation: lobby-rise 360ms ease both;
+}
+
+@keyframes lobby-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ============================================================
    FOND — bande d'asphalte et lignes de route
    ============================================================ */
@@ -469,6 +560,7 @@ h1 {
 
 .pill-red { background: var(--racing-red-dim); color: #ff8080; }
 .pill-blue { background: var(--electric-blue-dim); color: #7ecfff; }
+.pill-yellow { background: var(--pit-yellow-dim); color: var(--pit-yellow); }
 
 .qr-container {
   background: var(--chalk);
@@ -664,6 +756,33 @@ h1 {
   gap: 10px;
   color: #cacedc;
   font-size: 0.94rem;
+}
+
+.best-time-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.best-time-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.best-time-value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--pit-yellow);
+  letter-spacing: 0.02em;
+}
+
+.best-time-foot {
+  color: var(--slate);
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .info-card li {

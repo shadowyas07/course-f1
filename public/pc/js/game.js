@@ -527,6 +527,7 @@ function updateLapTracking(state) {
       state.race.lastLapTime = lapTime;
       if (!state.race.bestLapTime || lapTime < state.race.bestLapTime) {
         state.race.bestLapTime = lapTime;
+        syncBestTime(state);
       }
     }
     state.race.lap += 1;
@@ -544,6 +545,13 @@ function formatTime(seconds) {
   const m = Math.floor(seconds / 60);
   const s = seconds - m * 60;
   return `${m}:${s.toFixed(3).padStart(6, "0")}`;
+}
+
+function syncBestTime(state) {
+  if (window.selectedMode !== "solo-timed") return;
+  if (state.race.bestLapTime != null && typeof window.saveBestTime === "function") {
+    window.saveBestTime("solo-timed", state.race.bestLapTime);
+  }
 }
 
 // ============================================================
@@ -716,9 +724,13 @@ function finishRace(winnerState) {
   const loser = winnerState.playerId === 1 ? car2 : car1;
   finishTitle.textContent = `🏁 Joueur ${winnerState.playerId} gagne !`;
   finishTitle.style.color = winnerState.playerId === 1 ? "#ff5c5c" : "#4fa3ff";
+  const bestTimeLabel = window.selectedMode === "solo-timed" && typeof window.getBestTime === "function"
+    ? `Meilleur chrono : ${formatTime(window.getBestTime("solo-timed"))}`
+    : `Meilleur tour J${winnerState.playerId} : ${formatTime(winnerState.race.bestLapTime)}`;
+
   finishDetail.textContent =
     `Temps total : ${formatTime(raceState.elapsed)}\n` +
-    `Meilleur tour J${winnerState.playerId} : ${formatTime(winnerState.race.bestLapTime)}\n` +
+    `${bestTimeLabel}\n` +
     `Meilleur tour J${loser.playerId} : ${formatTime(loser.race.bestLapTime)}`;
   rematchBtn.textContent = "🔁 Rejouer";
   finishScreen.classList.remove("hidden");

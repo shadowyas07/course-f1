@@ -11,7 +11,20 @@
 </head>
 <body>
 
-  <div id="lobby-screen" class="screen">
+  <div id="boot-screen" class="screen boot-screen">
+    <div class="boot-card">
+      <p class="eyebrow">Lancement de la salle</p>
+      <h1>Prépare la piste</h1>
+      <p class="subtitle">Le circuit se charge, les QR codes se préparent et le menu principal s’ouvre en douceur.</p>
+      <div class="loading-bar" aria-hidden="true"><span class="loading-fill"></span></div>
+      <div class="boot-actions">
+        <button id="enter-lobby-btn">Entrer dans la salle</button>
+        <p class="boot-hint">Appuie sur Entrée ou sur le bouton pour passer directement.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="lobby-screen" class="screen hidden">
     <div class="track-lines" aria-hidden="true"></div>
 
     <div class="lobby-shell">
@@ -109,6 +122,14 @@
               <li>Mode paysage recommandé pour une vraie sensation cockpit</li>
               <li>Volant + pédales de frein et gaz à l'écran</li>
             </ul>
+          </div>
+          <div class="info-card best-time-card">
+            <div class="best-time-top">
+              <h3>Meilleur temps</h3>
+              <span id="best-time-mode" class="pill pill-yellow">Solo chronométré</span>
+            </div>
+            <p id="best-time-value" class="best-time-value">--:--.---</p>
+            <p class="best-time-foot">Le meilleur chrono est sauvegardé localement sur ce navigateur.</p>
           </div>
           <div class="info-card">
             <h3>Modes disponibles</h3>
