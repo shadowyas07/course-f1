@@ -35,7 +35,29 @@ h1 {
 
 .subtitle {
   color: #a0a0b8;
-  margin-bottom: 1.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.server-status {
+  margin-bottom: 1.2rem;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 196, 0, 0.14);
+  color: #ffd36f;
+  font-size: 0.93rem;
+  border: 1px solid rgba(255, 196, 0, 0.24);
+}
+
+.server-status.connected {
+  background: rgba(79, 209, 197, 0.16);
+  color: #4fd1c5;
+  border-color: rgba(79, 209, 197, 0.3);
+}
+
+.server-status.error {
+  background: rgba(255, 107, 107, 0.16);
+  color: #ff8f8f;
+  border-color: rgba(255, 107, 107, 0.28);
 }
 
 /* --- Lobby : cartes joueur --- */

@@ -30,6 +30,13 @@ const roomIdEl = document.getElementById("room-id");
 const status1 = document.getElementById("status-1");
 const status2 = document.getElementById("status-2");
 const startBtn = document.getElementById("start-race-btn");
+const serverStatusEl = document.getElementById("server-status");
+
+function setServerStatus(message, kind = "info") {
+  if (!serverStatusEl) return;
+  serverStatusEl.textContent = message;
+  serverStatusEl.className = `server-status ${kind}`.trim();
+}
 
 function refreshStartButton() {
   const ready = window.carControls1.connected && window.carControls2.connected;
@@ -39,13 +46,23 @@ function refreshStartButton() {
 
 socket.on("connect", () => {
   console.log("[network] Connecté au serveur, id =", socket.id);
+  setServerStatus("🟢 Connecté au serveur", "connected");
   socket.emit("register-pc");
+});
+
+socket.on("connect_error", () => {
+  setServerStatus("🔴 Impossible de joindre le serveur", "error");
+});
+
+socket.on("disconnect", () => {
+  setServerStatus("🔴 Déconnecté du serveur", "error");
 });
 
 socket.on("room-info", ({ roomId, players }) => {
   roomIdEl.textContent = roomId;
   qrImg1.src = players[1].qrCodeDataUrl;
   qrImg2.src = players[2].qrCodeDataUrl;
+  setServerStatus("✅ Room prête — les joueurs peuvent se connecter", "connected");
 });
 
 socket.on("player-joined", ({ player }) => {
@@ -55,6 +72,7 @@ socket.on("player-joined", ({ player }) => {
   statusEl.textContent = "✅ Connecté";
   statusEl.classList.remove("waiting");
   statusEl.classList.add("connected");
+  setServerStatus(`🟢 Joueur ${player} prêt`, "connected");
   refreshStartButton();
 });
 
@@ -75,6 +93,7 @@ socket.on("player-left", ({ player }) => {
 
 socket.on("server-error", ({ message }) => {
   console.error("[network] Erreur serveur:", message);
+  setServerStatus(`⚠️ ${message}`, "error");
 });
 
 // --- Réglages de course (panneau du lobby) ---
@@ -93,8 +112,11 @@ document.querySelectorAll('input[name="wall-mode"]').forEach((el) => {
 
 startBtn.addEventListener("click", () => {
   if (startBtn.disabled) return;
+  startBtn.disabled = true;
+  startBtn.textContent = "🚦 Démarrage…";
   document.getElementById("lobby-screen").classList.add("hidden");
   document.getElementById("game-screen").classList.remove("hidden");
+  setServerStatus("🏁 Course lancée", "connected");
   if (typeof window.startRace === "function") window.startRace();
 });
 

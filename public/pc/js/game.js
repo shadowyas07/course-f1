@@ -550,7 +550,7 @@ function formatTime(seconds) {
 // Caméra de suivi (par voiture)
 // ============================================================
 
-const cameraRig = { distance: 8, height: 3.6, lookAtHeight: 1.0, smoothing: 4.5 };
+const cameraRig = { distance: 8, height: 3.6, lookAtHeight: 1.0, smoothing: 5.2 };
 const _desiredCamPos = new THREE.Vector3();
 
 function updateCarCamera(state, dt) {
@@ -687,7 +687,7 @@ function runCountdown() {
       return;
     }
     countdownEl.textContent = steps[i];
-  }, 800);
+  }, 750);
 }
 
 /**
@@ -720,6 +720,7 @@ function finishRace(winnerState) {
     `Temps total : ${formatTime(raceState.elapsed)}\n` +
     `Meilleur tour J${winnerState.playerId} : ${formatTime(winnerState.race.bestLapTime)}\n` +
     `Meilleur tour J${loser.playerId} : ${formatTime(loser.race.bestLapTime)}`;
+  rematchBtn.textContent = "🔁 Rejouer";
   finishScreen.classList.remove("hidden");
 }
 

@@ -34,6 +34,8 @@ const requestedPlayer = getPlayerFromUrl();
 const playerBadge = document.getElementById("player-badge");
 
 let isPaused = false;
+let lastSentSteer = 0;
+let wheelSendTimer = null;
 
 // ============================================================
 // 1. Connexion à la room
@@ -97,9 +99,13 @@ function setStatus(kind, text) {
 pauseBtn.addEventListener("click", () => {
   isPaused = !isPaused;
   controllerScreen.style.opacity = isPaused ? "0.45" : "1";
+  pauseBtn.classList.toggle("active", isPaused);
   if (isPaused) {
     socket.emit("gas_release");
     socket.emit("brake_release");
+    setStatus("error", "⏸️ PAUSE");
+  } else {
+    setStatus("connected", "🟢 CONNECTÉ");
   }
 });
 
@@ -206,9 +212,12 @@ wheelEl.addEventListener("pointerup", onWheelPointerUp);
 wheelEl.addEventListener("pointercancel", onWheelPointerUp);
 
 function startWheelSending() {
-  setInterval(() => {
+  if (wheelSendTimer) clearInterval(wheelSendTimer);
+  wheelSendTimer = setInterval(() => {
     if (isPaused) return;
     const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, currentRotation));
+    if (Math.abs(clamped - lastSentSteer) < 0.01) return;
+    lastSentSteer = clamped;
     socket.emit("steer", { gamma: clamped, beta: 0 });
   }, 50);
 }

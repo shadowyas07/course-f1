@@ -22,9 +22,10 @@ const {
   createRoom,
   getRoom,
   joinRoom,
-  findRoomBySocketId,
   leavePlayer,
   deleteRoom,
+  cleanupExpiredRooms,
+  touchRoom,
 } = require("./rooms");
 
 const PORT = process.env.PORT || 3000;
@@ -56,6 +57,7 @@ const httpsOptions = loadHttpsOptions();
 const PROTOCOL = httpsOptions ? "https" : "http";
 
 const app = express();
+app.set("trust proxy", 1);
 const server = httpsOptions
   ? https.createServer(httpsOptions, app)
   : http.createServer(app);
@@ -76,6 +78,10 @@ if (!httpsOptions) {
 // indépendamment de tout souci de rendu HTML/CSS/JS.
 app.get("/ping", (req, res) => {
   res.type("text/plain").send(`OK - Le serveur répond bien. Heure serveur: ${new Date().toISOString()}`);
+});
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true, protocol: PROTOCOL, port: PORT, rooms: cleanupExpiredRooms() });
 });
 
 // --- Téléchargement de l'autorité de certification mkcert (à installer sur le téléphone) ---
@@ -114,6 +120,32 @@ function getLocalIP() {
 
 const LOCAL_IP = getLocalIP();
 
+function getPublicBaseUrl(req) {
+  if (process.env.RENDER_EXTERNAL_URL) {
+    return process.env.RENDER_EXTERNAL_URL.replace(/\/$/, "");
+  }
+
+  if (req?.headers) {
+    const forwardedProto = req.headers["x-forwarded-proto"];
+    const proto = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto || PROTOCOL;
+    const host = req.headers.host;
+    if (host) {
+      return `${proto}://${host}`;
+    }
+  }
+
+  return `${PROTOCOL}://${LOCAL_IP}:${PORT}`;
+}
+
+setInterval(() => {
+  const removed = cleanupExpiredRooms();
+  if (removed > 0) {
+    console.log(`[room] ${removed} room(s) expirée(s) nettoyée(s)`);
+  }
+}, 60_000);
+
 // --- Logique Socket.io ---
 io.on("connection", (socket) => {
   console.log(`[socket] Nouvelle connexion: ${socket.id}`);
@@ -128,8 +160,10 @@ io.on("connection", (socket) => {
     socket.join(roomId);
     socket.data.roomId = roomId;
     socket.data.role = "pc";
+    touchRoom(roomId);
 
-    const urlFor = (player) => `${PROTOCOL}://${LOCAL_IP}:${PORT}/mobile?room=${roomId}&player=${player}`;
+    const baseUrl = getPublicBaseUrl(socket.request);
+    const urlFor = (player) => `${baseUrl}/mobile?room=${roomId}&player=${player}`;
 
     try {
       const [qr1, qr2] = await Promise.all([
@@ -180,6 +214,7 @@ io.on("connection", (socket) => {
     socket.data.roomId = roomId;
     socket.data.role = "mobile";
     socket.data.player = assignedPlayer;
+    touchRoom(roomId);
 
     socket.emit("joined-room", { success: true, roomId, player: assignedPlayer });
 
@@ -199,6 +234,7 @@ io.on("connection", (socket) => {
     if (!roomId || !player) return;
     const room = getRoom(roomId);
     if (!room || !room.pcSocketId) return;
+    touchRoom(roomId);
     io.to(room.pcSocketId).emit(eventName, { player, ...payload });
   };
 
@@ -240,5 +276,6 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`  Serveur démarré sur le port ${PORT} (${PROTOCOL.toUpperCase()})`);
   console.log(`  PC (jeu)     : ${PROTOCOL}://localhost:${PORT}`);
   console.log(`  Mobile (LAN) : ${PROTOCOL}://${LOCAL_IP}:${PORT}/mobile`);
+  console.log(`  Public URL   : ${getPublicBaseUrl()}`);
   console.log("========================================");
 });

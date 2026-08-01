@@ -24,14 +24,23 @@ npm install
 npm start
 ```
 
+Pour vérifier rapidement que le serveur répond :
+
+```bash
+curl http://localhost:3000/health
+```
+
 Le terminal affiche l'IP locale à utiliser :
 ```
 ========================================
   Serveur démarré sur le port 3000 (HTTP ou HTTPS)
   PC (jeu)     : http://localhost:3000
   Mobile (LAN) : http://192.168.x.x:3000/mobile
+  Public URL   : https://votre-app.onrender.com
 ========================================
 ```
+
+Sur Render, l’URL publique HTTPS est détectée automatiquement via `RENDER_EXTERNAL_URL` ou l’en-tête `x-forwarded-proto`.
 
 ## HTTPS (optionnel mais recommandé)
 
@@ -104,6 +113,13 @@ car-game-project/
 - `window.carControls` (console du navigateur PC) : dernier état des inputs
   reçus de la manette (steerAngle, gasPressed, brakePressed).
 - Route `/ping` : test de connectivité HTTP(S) basique, sans JS/CSS.
+- Route `/health` : état du serveur et nombre de rooms actives.
+
+## Tests
+
+```bash
+npm test
+```
 
 ## Prochaines pistes d'amélioration
 

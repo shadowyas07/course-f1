@@ -152,6 +152,12 @@ html, body {
   transform: scale(0.94);
 }
 
+.icon-btn.active {
+  background: rgba(255, 196, 0, 0.2);
+  border-color: rgba(255, 196, 0, 0.45);
+  color: #ffd36f;
+}
+
 .icon-btn-label {
   font-size: 0.6rem;
   letter-spacing: 1px;

@@ -1,26 +1,14 @@
 /**
  * rooms.js
- * Gestion en memoire des rooms de jeu.
- * Chaque room associe UN écran PC (pilote du jeu) à DEUX smartphones (manettes
- * joueur 1 et joueur 2), pour une course 1 vs 1.
- *
- * Structure d'une room :
- * {
- *   roomId: string,
- *   pcSocketId: string | null,
- *   players: { 1: string|null, 2: string|null },  // socketId de chaque manette
- *   createdAt: number
- * }
+ * Gestion en mémoire des rooms de jeu.
+ * Chaque room associe UN écran PC à DEUX smartphones (joueurs 1 et 2).
  */
 
 const rooms = new Map();
+const ROOM_TTL_MS = Number(process.env.ROOM_TTL_MS || 15 * 60 * 1000);
 
-/**
- * Génère un identifiant de room court et lisible (utile pour du debug),
- * ex: "7F3K9A"
- */
 function generateRoomId() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sans caractères ambigus (0,O,1,I)
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let id;
   do {
     id = "";
@@ -31,9 +19,14 @@ function generateRoomId() {
   return id;
 }
 
-/**
- * Crée une nouvelle room associée à un socket PC.
- */
+function touchRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (room) {
+    room.updatedAt = Date.now();
+  }
+  return room;
+}
+
 function createRoom(pcSocketId) {
   const roomId = generateRoomId();
   rooms.set(roomId, {
@@ -41,24 +34,15 @@ function createRoom(pcSocketId) {
     pcSocketId,
     players: { 1: null, 2: null },
     createdAt: Date.now(),
+    updatedAt: Date.now(),
   });
   return roomId;
 }
 
-/**
- * Récupère une room par son id.
- */
 function getRoom(roomId) {
   return rooms.get(roomId) || null;
 }
 
-/**
- * Associe un socket mobile à un slot joueur (1 ou 2) d'une room existante.
- * - Si le slot demandé est libre, on l'attribue.
- * - S'il est déjà pris (ex: reconnexion ou lien copié par erreur), on bascule
- *   automatiquement sur l'autre slot s'il est libre.
- * Retourne { room, player } ou { room: null, player: null } si impossible.
- */
 function joinRoom(roomId, requestedPlayer, mobileSocketId) {
   const room = rooms.get(roomId);
   if (!room) return { room: null, player: null };
@@ -69,17 +53,15 @@ function joinRoom(roomId, requestedPlayer, mobileSocketId) {
     if (!room.players[other]) {
       player = other;
     } else {
-      return { room: null, player: null }; // les deux slots sont occupés
+      return { room: null, player: null };
     }
   }
 
   room.players[player] = mobileSocketId;
+  room.updatedAt = Date.now();
   return { room, player };
 }
 
-/**
- * Retrouve la room + le rôle ("pc" | 1 | 2) d'un socket donné.
- */
 function findRoomBySocketId(socketId) {
   for (const room of rooms.values()) {
     if (room.pcSocketId === socketId) return { room, role: "pc" };
@@ -89,20 +71,29 @@ function findRoomBySocketId(socketId) {
   return { room: null, role: null };
 }
 
-/**
- * Libère le slot d'un joueur (déconnexion) sans supprimer la room.
- */
 function leavePlayer(roomId, player) {
   const room = rooms.get(roomId);
   if (!room) return;
   room.players[player] = null;
+  room.updatedAt = Date.now();
 }
 
-/**
- * Supprime une room (ex: quand le PC se déconnecte).
- */
 function deleteRoom(roomId) {
   rooms.delete(roomId);
+}
+
+function cleanupExpiredRooms() {
+  const now = Date.now();
+  let removed = 0;
+
+  for (const [roomId, room] of rooms.entries()) {
+    if (now - room.updatedAt > ROOM_TTL_MS) {
+      rooms.delete(roomId);
+      removed += 1;
+    }
+  }
+
+  return removed;
 }
 
 module.exports = {
@@ -112,4 +103,6 @@ module.exports = {
   findRoomBySocketId,
   leavePlayer,
   deleteRoom,
+  cleanupExpiredRooms,
+  touchRoom,
 };

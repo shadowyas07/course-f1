@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node server/server.js",
+    "test": "node --test tests/rooms.test.js",
     "postinstall": "node scripts/copy-vendor.js"
   },
   "dependencies": {
