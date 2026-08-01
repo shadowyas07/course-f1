@@ -20,15 +20,38 @@
         <div class="hero-text">
           <p class="eyebrow">Course arcade locale — écran partagé</p>
           <h1>Course 3D <span class="vs-mark">1<span class="vs-x">v</span>1</span></h1>
-          <p class="subtitle">Chaque pilote scanne son QR code depuis son téléphone. Volant à l'écran, pied au plancher, la course démarre en quelques secondes.</p>
+          <p class="subtitle">Choisis ton mode, branche tes pilotes et fais décoller la course. Le menu s’inspire des grands jeux de course avec une vraie expérience de lancement.</p>
         </div>
         <div id="server-status" class="server-status">
           <span class="status-dot"></span>Connexion au serveur…
         </div>
       </header>
 
+      <div class="mode-selector" aria-label="Sélection du mode de jeu">
+        <button class="mode-card active" data-mode="duel">
+          <span class="mode-title">⚡ Duel 1v1</span>
+          <span class="mode-desc">Deux pilotes, une piste, la victoire à la clé.</span>
+        </button>
+        <button class="mode-card" data-mode="solo-timed">
+          <span class="mode-title">⏱️ Solo chronométré</span>
+          <span class="mode-desc">Un seul pilote, des tours à battre, un meilleur temps à viser.</span>
+        </button>
+        <button class="mode-card" data-mode="solo-free">
+          <span class="mode-title">🏁 Solo libre</span>
+          <span class="mode-desc">Course sans pression, pour apprendre et prendre du plaisir.</span>
+        </button>
+      </div>
+
       <div class="content-grid">
         <section class="main-panel">
+          <div class="mode-banner" id="mode-banner">
+            <div>
+              <p class="banner-label">Mode actif</p>
+              <h3 id="mode-banner-title">Duel 1v1</h3>
+            </div>
+            <p id="mode-banner-desc">Deux joueurs sont connectés sur la même piste pour une confrontation directe.</p>
+          </div>
+
           <div id="players-row">
             <div class="player-card player-card-1">
               <div class="card-corner" aria-hidden="true"></div>
@@ -81,18 +104,18 @@
           <div class="info-card">
             <h3>Comment jouer</h3>
             <ul>
-              <li>Ouvre la page sur le PC</li>
+              <li>Choisis un mode avant de lancer la course</li>
               <li>Scanne ton QR code depuis ton téléphone</li>
-              <li>Passe le téléphone en mode paysage</li>
+              <li>Mode paysage recommandé pour une vraie sensation cockpit</li>
               <li>Volant + pédales de frein et gaz à l'écran</li>
             </ul>
           </div>
           <div class="info-card">
             <h3>Modes disponibles</h3>
             <ul>
-              <li>Herbe — limite souple, plus arcade</li>
-              <li>Mur — piste stricte, plus compétitive</li>
-              <li>3, 5 ou 8 tours selon la préférence</li>
+              <li>Duel 1v1 — bataille directe</li>
+              <li>Solo chronométré — meilleur temps</li>
+              <li>Solo libre — ambiance détente</li>
             </ul>
           </div>
         </aside>
@@ -146,6 +169,7 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/network.js"></script>
+  <script src="js/menu.js"></script>
   <script type="module" src="js/game.js"></script>
 </body>
 </html>
