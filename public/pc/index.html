@@ -7,44 +7,82 @@
 </head>
 <body>
   <div id="lobby-screen" class="screen">
-    <h1>🏎️ Course 3D — 1 vs 1</h1>
-    <p class="subtitle">Chaque joueur scanne son QR code avec son smartphone (même réseau Wi-Fi)</p>
-    <div id="server-status" class="server-status">🟡 Connexion au serveur…</div>
+    <div class="lobby-shell">
+      <header class="hero-panel">
+        <div>
+          <p class="eyebrow">Course arcade locale</p>
+          <h1>🏎️ Course 3D — 1 vs 1</h1>
+          <p class="subtitle">Chaque joueur scanne son QR code depuis son smartphone et la course démarre en quelques secondes.</p>
+        </div>
+        <div id="server-status" class="server-status">🟡 Connexion au serveur…</div>
+      </header>
 
-    <div id="players-row">
-      <div class="player-card player-card-1">
-        <h2>Joueur 1</h2>
-        <div class="qr-container"><img id="qr-code-1" src="" alt="QR Code joueur 1" /></div>
-        <p id="status-1" class="status waiting">⏳ En attente...</p>
-      </div>
-      <div class="player-card player-card-2">
-        <h2>Joueur 2</h2>
-        <div class="qr-container"><img id="qr-code-2" src="" alt="QR Code joueur 2" /></div>
-        <p id="status-2" class="status waiting">⏳ En attente...</p>
+      <div class="content-grid">
+        <section class="main-panel">
+          <div id="players-row">
+            <div class="player-card player-card-1">
+              <div class="player-top">
+                <h2>Joueur 1</h2>
+                <span class="pill pill-red">Pilote A</span>
+              </div>
+              <div class="qr-container"><img id="qr-code-1" src="" alt="QR Code joueur 1" /></div>
+              <p id="status-1" class="status waiting">⏳ En attente...</p>
+            </div>
+            <div class="player-card player-card-2">
+              <div class="player-top">
+                <h2>Joueur 2</h2>
+                <span class="pill pill-blue">Pilote B</span>
+              </div>
+              <div class="qr-container"><img id="qr-code-2" src="" alt="QR Code joueur 2" /></div>
+              <p id="status-2" class="status waiting">⏳ En attente...</p>
+            </div>
+          </div>
+
+          <div class="room-bar">
+            <span id="room-code">Room : <strong id="room-id">...</strong></span>
+            <button id="start-race-btn" disabled>En attente des 2 joueurs...</button>
+          </div>
+
+          <div id="race-settings">
+            <div class="settings-group">
+              <span class="settings-label">Nombre de tours</span>
+              <div class="settings-options">
+                <label><input type="radio" name="laps" value="3" checked /> 3</label>
+                <label><input type="radio" name="laps" value="5" /> 5</label>
+                <label><input type="radio" name="laps" value="8" /> 8</label>
+              </div>
+            </div>
+            <div class="settings-group">
+              <span class="settings-label">Limites de terrain</span>
+              <div class="settings-options">
+                <label><input type="radio" name="wall-mode" value="grass" checked /> 🌱 Herbe (ralentit)</label>
+                <label><input type="radio" name="wall-mode" value="wall" /> 🧱 Mur (bloque)</label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="side-panel">
+          <div class="info-card">
+            <h3>⚡ Comment jouer</h3>
+            <ul>
+              <li>Ouvre la page sur le PC</li>
+              <li>Scanne les QR codes depuis votre téléphone</li>
+              <li>Tourne le téléphone en mode paysage</li>
+              <li>Utilise le volant et les boutons de frein/gaz</li>
+            </ul>
+          </div>
+          <div class="info-card">
+            <h3>🎮 Modes disponibles</h3>
+            <ul>
+              <li>Herbe : limite souple et plus arcade</li>
+              <li>Mur : piste plus stricte et plus compétitive</li>
+              <li>3, 5 ou 8 tours selon votre préférence</li>
+            </ul>
+          </div>
+        </aside>
       </div>
     </div>
-
-    <p id="room-code">Room : <span id="room-id">...</span></p>
-
-    <div id="race-settings">
-      <div class="settings-group">
-        <span class="settings-label">Nombre de tours</span>
-        <div class="settings-options">
-          <label><input type="radio" name="laps" value="3" checked /> 3</label>
-          <label><input type="radio" name="laps" value="5" /> 5</label>
-          <label><input type="radio" name="laps" value="8" /> 8</label>
-        </div>
-      </div>
-      <div class="settings-group">
-        <span class="settings-label">Limites de terrain</span>
-        <div class="settings-options">
-          <label><input type="radio" name="wall-mode" value="grass" checked /> 🌱 Herbe (ralentit)</label>
-          <label><input type="radio" name="wall-mode" value="wall" /> 🧱 Mur (bloque)</label>
-        </div>
-      </div>
-    </div>
-
-    <button id="start-race-btn" disabled>En attente des 2 joueurs...</button>
   </div>
 
   <div id="game-screen" class="screen hidden">
