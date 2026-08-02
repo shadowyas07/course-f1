@@ -147,7 +147,10 @@
   <div id="game-screen" class="screen hidden">
     <canvas id="game-canvas"></canvas>
 
+    <div class="race-vignette" aria-hidden="true"></div>
+
     <div id="split-divider"></div>
+    <div class="split-divider-chip" aria-hidden="true">1 vs 1</div>
 
     <div id="hud-1" class="hud hud-left">
       <div class="hud-player-tag hud-tag-1">Joueur 1</div>
@@ -177,11 +180,22 @@
       </div>
     </div>
 
-    <canvas id="minimap" width="150" height="150"></canvas>
+    <div id="minimap-wrap">
+      <canvas id="minimap" width="150" height="150"></canvas>
+      <div class="minimap-sweep" aria-hidden="true"></div>
+      <div class="minimap-legend" aria-hidden="true">
+        <span class="legend-1">P1</span>
+        <span class="legend-2">P2</span>
+      </div>
+    </div>
 
     <div id="countdown" class="hidden">3</div>
 
     <div id="finish-screen" class="hidden">
+      <div class="finish-confetti" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+        <span></span><span></span><span></span><span></span>
+      </div>
       <h2 id="finish-title">Victoire !</h2>
       <p id="finish-detail"></p>
       <button id="rematch-btn">Rejouer</button>
@@ -191,6 +205,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="js/network.js"></script>
   <script src="js/menu.js"></script>
+  <script src="js/hud-fx.js"></script>
   <script type="module" src="js/game.js"></script>
 </body>
 </html>
