@@ -16,10 +16,24 @@
       <p class="eyebrow">Lancement de la salle</p>
       <h1>Prépare la piste</h1>
       <p class="subtitle">Le circuit se charge, les QR codes se préparent et le menu principal s’ouvre en douceur.</p>
+      <div class="mode-selector boot-mode-selector" aria-label="Sélection du mode de jeu">
+        <button class="mode-card active" data-mode="duel">
+          <span class="mode-title">⚡ Duel 1v1</span>
+          <span class="mode-desc">Deux pilotes, une piste, la victoire à la clé.</span>
+        </button>
+        <button class="mode-card" data-mode="solo-timed">
+          <span class="mode-title">⏱️ Solo chronométré</span>
+          <span class="mode-desc">Un seul pilote, des tours à battre, un meilleur temps à viser.</span>
+        </button>
+        <button class="mode-card" data-mode="solo-free">
+          <span class="mode-title">🏁 Solo libre</span>
+          <span class="mode-desc">Course sans pression, pour apprendre et prendre du plaisir.</span>
+        </button>
+      </div>
       <div class="loading-bar" aria-hidden="true"><span class="loading-fill"></span></div>
       <div class="boot-actions">
         <button id="enter-lobby-btn">Entrer dans la salle</button>
-        <p class="boot-hint">Appuie sur Entrée ou sur le bouton pour passer directement.</p>
+        <p class="boot-hint">Choisis un mode puis appuie sur Entrée ou sur le bouton pour continuer.</p>
       </div>
     </div>
   </div>
@@ -39,21 +53,6 @@
           <span class="status-dot"></span>Connexion au serveur…
         </div>
       </header>
-
-      <div class="mode-selector" aria-label="Sélection du mode de jeu">
-        <button class="mode-card active" data-mode="duel">
-          <span class="mode-title">⚡ Duel 1v1</span>
-          <span class="mode-desc">Deux pilotes, une piste, la victoire à la clé.</span>
-        </button>
-        <button class="mode-card" data-mode="solo-timed">
-          <span class="mode-title">⏱️ Solo chronométré</span>
-          <span class="mode-desc">Un seul pilote, des tours à battre, un meilleur temps à viser.</span>
-        </button>
-        <button class="mode-card" data-mode="solo-free">
-          <span class="mode-title">🏁 Solo libre</span>
-          <span class="mode-desc">Course sans pression, pour apprendre et prendre du plaisir.</span>
-        </button>
-      </div>
 
       <div class="content-grid">
         <section class="main-panel">
