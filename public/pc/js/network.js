@@ -123,6 +123,7 @@ document.querySelectorAll('input[name="wall-mode"]').forEach((el) => {
 
 startBtn.addEventListener("click", () => {
   if (startBtn.disabled) return;
+  if (typeof window.enableGameAudio === "function") window.enableGameAudio();
   startBtn.disabled = true;
   startBtn.textContent = "🚦 Démarrage…";
   document.getElementById("lobby-screen").classList.add("hidden");

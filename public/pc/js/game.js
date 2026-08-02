@@ -190,9 +190,11 @@ function buildScenery() {
 
 function buildCar(bodyColor) {
   const car = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.4, metalness: 0.3 });
-  const cabinMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2a, roughness: 0.3, metalness: 0.2 });
+  const bodyMat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.26, metalness: 0.48 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x090a0f, roughness: 0.35, metalness: 0.7 });
+  const cabinMat = new THREE.MeshStandardMaterial({ color: 0x171c2f, roughness: 0.2, metalness: 0.3, transparent: true, opacity: 0.86 });
   const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xc9d5df, roughness: 0.25, metalness: 0.95 });
   const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfff6cc, emissive: 0xfff2a0, emissiveIntensity: 1.2 });
   const brakeMat = new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0x220000, emissiveIntensity: 0.4 });
 
@@ -201,10 +203,37 @@ function buildCar(bodyColor) {
   body.castShadow = true;
   car.add(body);
 
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.24, 1.25), bodyMat);
+  hood.position.set(0, 0.78, 1.18);
+  hood.castShadow = true;
+  car.add(hood);
+
+  const frontLip = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.2, 0.3), accentMat);
+  frontLip.position.set(0, 0.32, 2.13);
+  frontLip.castShadow = true;
+  car.add(frontLip);
+
+  const rearDiffuser = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 0.36), accentMat);
+  rearDiffuser.position.set(0, 0.34, -2.13);
+  rearDiffuser.castShadow = true;
+  car.add(rearDiffuser);
+
   const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.5, 2.0), cabinMat);
   cabin.position.set(0, 0.95, -0.2);
   cabin.castShadow = true;
   car.add(cabin);
+
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.1, 1.28), accentMat);
+  roof.position.set(0, 1.25, -0.14);
+  roof.castShadow = true;
+  car.add(roof);
+
+  for (const x of [-0.95, 0.95]) {
+    const sideSkirt = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.18, 2.5), accentMat);
+    sideSkirt.position.set(x, 0.34, -0.08);
+    sideSkirt.castShadow = true;
+    car.add(sideSkirt);
+  }
 
   const headlightGeo = new THREE.BoxGeometry(0.32, 0.16, 0.08);
   for (const x of [-0.7, 0.7]) {
@@ -222,11 +251,14 @@ function buildCar(bodyColor) {
     brakeLights.push(bl);
   }
 
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 16);
+  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 22);
   function makeWheel() {
     const w = new THREE.Mesh(wheelGeo, wheelMat);
     w.rotation.z = Math.PI / 2;
     w.castShadow = true;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.36, 18), rimMat);
+    rim.rotation.z = Math.PI / 2;
+    w.add(rim);
     return w;
   }
 
@@ -253,6 +285,21 @@ function buildCar(bodyColor) {
   const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.4), cabinMat);
   spoiler.position.set(0, 0.95, -2.1);
   car.add(spoiler);
+
+  const spoilerStandGeo = new THREE.BoxGeometry(0.12, 0.22, 0.1);
+  for (const x of [-0.55, 0.55]) {
+    const stand = new THREE.Mesh(spoilerStandGeo, accentMat);
+    stand.position.set(x, 0.84, -1.99);
+    stand.castShadow = true;
+    car.add(stand);
+  }
+
+  for (const x of [-0.35, 0.35]) {
+    const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.24, 12), rimMat);
+    exhaust.rotation.x = Math.PI / 2;
+    exhaust.position.set(x, 0.34, -2.2);
+    car.add(exhaust);
+  }
 
   return {
     group: car,
@@ -516,6 +563,125 @@ const raceState = {
   wallMode: false,
 };
 
+// ============================================================
+// Audio runtime (moteur + countdown + victoire)
+// ============================================================
+
+const audioState = {
+  ctx: null,
+  masterGain: null,
+  unlocked: false,
+  carSounds: {
+    1: { osc: null, gain: null },
+    2: { osc: null, gain: null },
+  },
+};
+
+function ensureAudioContext() {
+  if (audioState.ctx) return audioState.ctx;
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  const ctx = new Ctx();
+  const master = ctx.createGain();
+  master.gain.value = 0.18;
+  master.connect(ctx.destination);
+  audioState.ctx = ctx;
+  audioState.masterGain = master;
+  return ctx;
+}
+
+function initCarEngineAudio(playerId) {
+  const ctx = ensureAudioContext();
+  if (!ctx || !audioState.masterGain) return;
+  const slot = audioState.carSounds[playerId];
+  if (!slot || slot.osc) return;
+
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.value = 85;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 900;
+
+  const gain = ctx.createGain();
+  gain.gain.value = 0;
+
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioState.masterGain);
+  osc.start();
+
+  slot.osc = osc;
+  slot.gain = gain;
+}
+
+function unlockAudio() {
+  const ctx = ensureAudioContext();
+  if (!ctx) return;
+  if (ctx.state === "suspended") {
+    ctx.resume().catch(() => {});
+  }
+  initCarEngineAudio(1);
+  initCarEngineAudio(2);
+  audioState.unlocked = true;
+}
+
+window.enableGameAudio = unlockAudio;
+
+function scheduleTone(freq, duration, type = "square", startAt = 0, volume = 0.16) {
+  const ctx = ensureAudioContext();
+  if (!ctx || !audioState.masterGain) return;
+  const t0 = ctx.currentTime + startAt;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(volume, t0 + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(gain);
+  gain.connect(audioState.masterGain);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.04);
+}
+
+function playCountdownAudio(stepText) {
+  if (!audioState.unlocked) return;
+  if (stepText === "GO !") {
+    scheduleTone(680, 0.2, "triangle", 0.0, 0.18);
+    scheduleTone(980, 0.28, "triangle", 0.12, 0.16);
+    return;
+  }
+  scheduleTone(480, 0.14, "square", 0, 0.12);
+}
+
+function playVictoryAudio(playerId) {
+  if (!audioState.unlocked) return;
+  const shift = playerId === 1 ? 0 : 30;
+  scheduleTone(520 + shift, 0.16, "triangle", 0.0, 0.16);
+  scheduleTone(650 + shift, 0.2, "triangle", 0.14, 0.15);
+  scheduleTone(780 + shift, 0.26, "triangle", 0.32, 0.15);
+}
+
+function updateCarEngineAudio(state, dt) {
+  if (!audioState.unlocked) return;
+  const slot = audioState.carSounds[state.playerId];
+  if (!slot || !slot.osc || !slot.gain || !audioState.ctx) return;
+
+  const speedRatio = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
+  const controls = getControls(state.playerId);
+  const throttleBoost = controls.gasPressed ? 0.18 : 0;
+  const targetFreq = 90 + speedRatio * 220 + throttleBoost * 120;
+  const targetGain = raceLocked ? 0.0001 : 0.03 + speedRatio * 0.08 + throttleBoost * 0.04;
+  const smooth = Math.min(1, dt * 8);
+
+  const currentFreq = slot.osc.frequency.value;
+  const currentGain = slot.gain.gain.value;
+  slot.osc.frequency.setValueAtTime(currentFreq + (targetFreq - currentFreq) * smooth, audioState.ctx.currentTime);
+  slot.gain.gain.setValueAtTime(currentGain + (targetGain - currentGain) * smooth, audioState.ctx.currentTime);
+}
+
 function updateLapTracking(state) {
   const n = TRACK_SAMPLES;
   const idx = analyzeTrackPosition(state.physics.x, state.physics.z).index;
@@ -686,6 +852,7 @@ function runCountdown() {
   let i = 0;
   countdownEl.classList.remove("hidden");
   countdownEl.textContent = steps[i];
+  playCountdownAudio(steps[i]);
   const interval = setInterval(() => {
     i++;
     if (i >= steps.length) {
@@ -695,6 +862,7 @@ function runCountdown() {
       return;
     }
     countdownEl.textContent = steps[i];
+    playCountdownAudio(steps[i]);
   }, 750);
 }
 
@@ -703,6 +871,7 @@ function runCountdown() {
  * et que le bouton "Lancer la course" est cliqué.
  */
 window.startRace = function startRace() {
+  unlockAudio();
   raceState.laps = window.raceSettings.laps || 3;
   raceState.wallMode = !!window.raceSettings.wallMode;
   raceState.elapsed = 0;
@@ -720,6 +889,7 @@ function finishRace(winnerState) {
   winnerState.race.finished = true;
   raceState.running = false;
   raceLocked = true;
+  playVictoryAudio(winnerState.playerId);
 
   const loser = winnerState.playerId === 1 ? car2 : car1;
   finishTitle.textContent = `🏁 Joueur ${winnerState.playerId} gagne !`;
@@ -751,7 +921,22 @@ window.onPlayerLeftDuringRace = function onPlayerLeftDuringRace(player) {
 };
 
 rematchBtn.addEventListener("click", () => {
-  window.location.reload();
+  const mode = window.selectedMode || "duel";
+  const isSolo = mode === "solo-timed" || mode === "solo-free";
+  const canReplay = isSolo ? window.carControls1?.connected : window.carControls1?.connected && window.carControls2?.connected;
+  if (!canReplay) {
+    finishTitle.textContent = "Connexion manette requise";
+    finishTitle.style.color = "#ffc93c";
+    finishDetail.textContent = isSolo
+      ? "Le pilote doit rester connecté pour rejouer."
+      : "Les deux pilotes doivent rester connectés pour relancer immédiatement.";
+    return;
+  }
+  rematchBtn.textContent = "🚦 Relance...";
+  setTimeout(() => {
+    rematchBtn.textContent = "🔁 Rejouer";
+    window.startRace();
+  }, 120);
 });
 
 // ============================================================
@@ -778,6 +963,7 @@ function animate() {
   for (const state of cars) {
     updateCarCamera(state, dt);
     updateHud(state);
+    updateCarEngineAudio(state, dt);
   }
   updateDust(dt);
   drawMinimap();
