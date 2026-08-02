@@ -12,6 +12,12 @@ const startError = document.getElementById("start-error");
 const controllerScreen = document.getElementById("controller-screen");
 const wheelEl = document.getElementById("wheel");
 const wheelHint = document.getElementById("wheel-hint");
+const tiltHint = document.getElementById("tilt-hint");
+const tiltEnableBtn = document.getElementById("tilt-enable-btn");
+const steerModeBtns = Array.from(document.querySelectorAll(".mode-btn"));
+const buttonSteer = document.getElementById("button-steer");
+const leftBtn = document.getElementById("left-btn");
+const rightBtn = document.getElementById("right-btn");
 const gasBtn = document.getElementById("gas-btn");
 const brakeBtn = document.getElementById("brake-btn");
 const pauseBtn = document.getElementById("pause-btn");
@@ -36,6 +42,17 @@ const playerBadge = document.getElementById("player-badge");
 let isPaused = false;
 let lastSentSteer = 0;
 let wheelSendTimer = null;
+let steerMode = "wheel";
+let tiltAvailable = false;
+let tiltPermissionState = "unknown";
+let tiltSmoothedGamma = 0;
+let buttonLeftPressed = false;
+let buttonRightPressed = false;
+
+if (typeof window.DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function") {
+  tiltAvailable = true;
+  tiltPermissionState = "granted";
+}
 
 // ============================================================
 // 1. Connexion à la room
@@ -92,6 +109,30 @@ function setStatus(kind, text) {
   statusLine.classList.add(`status-${kind}`);
 }
 
+function setSteerMode(mode) {
+  steerMode = mode;
+  steerModeBtns.forEach((btn) => btn.classList.toggle("active", btn.dataset.steerMode === mode));
+
+  const useWheel = mode === "wheel";
+  const useTilt = mode === "tilt";
+  const useButtons = mode === "buttons";
+
+  wheelEl.classList.toggle("inactive", !useWheel);
+  wheelHint.classList.toggle("hidden", !useWheel);
+  tiltHint.classList.toggle("hidden", !useTilt);
+  buttonSteer.classList.toggle("hidden", !useButtons);
+
+  const needsEnable = useTilt && !tiltAvailable;
+  tiltEnableBtn.classList.toggle("hidden", !needsEnable);
+
+  if (!useButtons) {
+    buttonLeftPressed = false;
+    buttonRightPressed = false;
+    leftBtn.classList.remove("active");
+    rightBtn.classList.remove("active");
+  }
+}
+
 // ============================================================
 // 2. Bouton pause (visuel : suspend l'envoi des contrôles)
 // ============================================================
@@ -107,6 +148,12 @@ pauseBtn.addEventListener("click", () => {
   } else {
     setStatus("connected", "🟢 CONNECTÉ");
   }
+});
+
+steerModeBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSteerMode(btn.dataset.steerMode || "wheel");
+  });
 });
 
 // ============================================================
@@ -144,6 +191,7 @@ function fadeHintOnce() {
 }
 
 function onWheelPointerDown(e) {
+  if (steerMode !== "wheel") return;
   if (isPaused) return;
   e.preventDefault();
   fadeHintOnce();
@@ -157,6 +205,7 @@ function onWheelPointerDown(e) {
 }
 
 function onWheelPointerMove(e) {
+  if (steerMode !== "wheel") return;
   if (!isDragging) return;
   e.preventDefault();
 
@@ -174,6 +223,7 @@ function onWheelPointerMove(e) {
 }
 
 function onWheelPointerUp(e) {
+  if (steerMode !== "wheel") return;
   if (!isDragging) return;
   isDragging = false;
   try {
@@ -215,11 +265,95 @@ function startWheelSending() {
   if (wheelSendTimer) clearInterval(wheelSendTimer);
   wheelSendTimer = setInterval(() => {
     if (isPaused) return;
-    const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, currentRotation));
+    let steeringSource = currentRotation;
+
+    if (steerMode === "tilt" && tiltAvailable) {
+      steeringSource = tiltSmoothedGamma;
+      if (!isDragging) {
+        applyWheelRotation(steeringSource);
+      }
+    } else if (steerMode === "buttons") {
+      const target = (buttonRightPressed ? 1 : 0) - (buttonLeftPressed ? 1 : 0);
+      const targetRotation = target * STEER_EFFECTIVE_RANGE;
+      const lerp = 0.3;
+      const next = currentRotation + (targetRotation - currentRotation) * lerp;
+      applyWheelRotation(next);
+      steeringSource = next;
+    }
+
+    const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource));
     if (Math.abs(clamped - lastSentSteer) < 0.01) return;
     lastSentSteer = clamped;
     socket.emit("steer", { gamma: clamped, beta: 0 });
   }, 50);
+}
+
+function handleTiltEvent(event) {
+  if (event.gamma == null) return;
+  const raw = Math.max(-45, Math.min(45, event.gamma));
+  const mapped = (raw / 45) * STEER_EFFECTIVE_RANGE;
+  tiltSmoothedGamma = tiltSmoothedGamma * 0.78 + mapped * 0.22;
+}
+
+async function requestTiltPermission() {
+  if (typeof DeviceOrientationEvent === "undefined") {
+    setStatus("error", "⚠️ Inclinaison non supportée");
+    return;
+  }
+
+  try {
+    if (typeof DeviceOrientationEvent.requestPermission === "function") {
+      const result = await DeviceOrientationEvent.requestPermission();
+      tiltPermissionState = result;
+      tiltAvailable = result === "granted";
+    } else {
+      tiltAvailable = true;
+      tiltPermissionState = "granted";
+    }
+  } catch (err) {
+    tiltPermissionState = "denied";
+    tiltAvailable = false;
+  }
+
+  tiltEnableBtn.classList.toggle("hidden", !(steerMode === "tilt" && !tiltAvailable));
+  if (!tiltAvailable && steerMode === "tilt") {
+    setStatus("error", "⚠️ Autorise le gyroscope");
+  } else if (tiltAvailable && steerMode === "tilt") {
+    setStatus("connected", "🟢 CONNECTÉ · INCLINAISON");
+  }
+}
+
+if (typeof window.DeviceOrientationEvent !== "undefined") {
+  window.addEventListener("deviceorientation", handleTiltEvent, { passive: true });
+}
+
+tiltEnableBtn.addEventListener("click", () => {
+  requestTiltPermission();
+});
+
+bindSteerButton(leftBtn, "left");
+bindSteerButton(rightBtn, "right");
+
+function bindSteerButton(btnEl, side) {
+  const press = (e) => {
+    if (isPaused || steerMode !== "buttons") return;
+    e.preventDefault();
+    if (side === "left") buttonLeftPressed = true;
+    else buttonRightPressed = true;
+    btnEl.classList.add("active");
+  };
+
+  const release = (e) => {
+    if (e) e.preventDefault();
+    if (side === "left") buttonLeftPressed = false;
+    else buttonRightPressed = false;
+    btnEl.classList.remove("active");
+  };
+
+  btnEl.addEventListener("pointerdown", press);
+  btnEl.addEventListener("pointerup", release);
+  btnEl.addEventListener("pointercancel", release);
+  btnEl.addEventListener("pointerleave", release);
 }
 
 // ============================================================
@@ -228,6 +362,8 @@ function startWheelSending() {
 
 bindPressRelease(gasBtn, "gas_press", "gas_release");
 bindPressRelease(brakeBtn, "brake_press", "brake_release");
+
+setSteerMode("wheel");
 
 function bindPressRelease(btnEl, pressEvent, releaseEvent) {
   let isPressed = false;

@@ -39,9 +39,16 @@
       </div>
     </div>
 
+    <div id="steer-modes" aria-label="Mode de direction">
+      <button class="mode-btn active" data-steer-mode="wheel">Volant</button>
+      <button class="mode-btn" data-steer-mode="tilt">Inclinaison</button>
+      <button class="mode-btn" data-steer-mode="buttons">Boutons</button>
+    </div>
+
     <!-- Volant -->
     <div id="wheel-zone">
       <p id="wheel-hint">◄ TOURNER ►</p>
+      <p id="tilt-hint" class="hidden">Incline le téléphone pour tourner</p>
       <div id="wheel">
         <div id="wheel-grip"></div>
         <div id="wheel-hub">
@@ -49,6 +56,13 @@
             <path fill="currentColor" d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11h1a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-1v1a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h1zm2.1 0h9.8l-1-3H8.1l-1 3zM6.5 14a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm11 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/>
           </svg>
         </div>
+      </div>
+
+      <button id="tilt-enable-btn" class="hidden">Activer l'inclinaison</button>
+
+      <div id="button-steer" class="hidden">
+        <button id="left-btn" class="steer-btn" aria-label="Tourner à gauche">◄ Gauche</button>
+        <button id="right-btn" class="steer-btn" aria-label="Tourner à droite">Droite ►</button>
       </div>
     </div>
 
