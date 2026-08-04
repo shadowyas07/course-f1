@@ -789,7 +789,7 @@ grassGeo.setAttribute("position", new THREE.BufferAttribute(grassPositions, 3));
 const grassMat = new THREE.PointsMaterial({ color: 0x9f8a63, size: 0.22, transparent: true, opacity: 0.9, depthWrite: false });
 scene.add(new THREE.Points(grassGeo, grassMat));
 
-const smokeCount = 140;
+const smokeCount = 520;
 const smokeGeo = new THREE.BufferGeometry();
 const smokePositions = new Float32Array(smokeCount * 3);
 const smokeVelocities = new Array(smokeCount).fill(null).map(() => new THREE.Vector3());
@@ -797,7 +797,14 @@ const smokeLife = new Float32Array(smokeCount);
 let smokeNeedsUpload = false;
 for (let i = 0; i < smokeCount; i++) smokePositions[i * 3 + 1] = -100;
 smokeGeo.setAttribute("position", new THREE.BufferAttribute(smokePositions, 3));
-const smokeMat = new THREE.PointsMaterial({ color: 0xf5f7fa, size: 0.58, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
+const smokeMat = new THREE.PointsMaterial({
+  color: 0xffffff,
+  size: 1.25,
+  transparent: true,
+  opacity: 0.98,
+  depthWrite: false,
+  depthTest: false,
+});
 scene.add(new THREE.Points(smokeGeo, smokeMat));
 
 const SPARK_COUNT = 140;
@@ -863,13 +870,29 @@ function spawnSmoke(x, z, count) {
   for (let n = 0; n < spawnCount; n++) {
     const i = smokeCursor;
     smokeCursor = (smokeCursor + 1) % smokeCount;
-    smokePositions[i * 3] = x + (Math.random() - 0.5) * 1.0;
-    smokePositions[i * 3 + 1] = 0.24;
-    smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 1.0;
-    smokeVelocities[i].set((Math.random() - 0.5) * 1.0, 1.1 + Math.random() * 1.25, (Math.random() - 0.5) * 1.0);
-    smokeLife[i] = 0.85 + Math.random() * 0.75;
+    smokePositions[i * 3] = x + (Math.random() - 0.5) * 1.35;
+    smokePositions[i * 3 + 1] = 0.22;
+    smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 1.35;
+    smokeVelocities[i].set((Math.random() - 0.5) * 1.25, 1.4 + Math.random() * 1.5, (Math.random() - 0.5) * 1.25);
+    smokeLife[i] = 1.05 + Math.random() * 0.9;
   }
   smokeNeedsUpload = true;
+}
+
+function spawnDriftSmokeFromRearWheels(state, speedAbs) {
+  const heading = state.physics.heading;
+  const rearZ = -1.4;
+  const rearX = 1.05;
+  const cos = Math.cos(heading);
+  const sin = Math.sin(heading);
+  const leftX = state.physics.x + (-rearX) * cos + rearZ * sin;
+  const leftZ = state.physics.z - (-rearX) * sin + rearZ * cos;
+  const rightX = state.physics.x + rearX * cos + rearZ * sin;
+  const rightZ = state.physics.z - rearX * sin + rearZ * cos;
+
+  const smokeBurst = 3 + Math.floor(speedAbs / 6);
+  spawnSmoke(leftX, leftZ, smokeBurst);
+  spawnSmoke(rightX, rightZ, smokeBurst);
 }
 
 function updateDust(dt) {
@@ -1246,8 +1269,12 @@ function updateCarPhysics(state, dt, wallMode) {
     physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * recoverRate);
   }
 
-  if (canDrift && Math.abs(physics.driftYaw) > 0.18) {
-    spawnSmoke(physics.x, physics.z, 3 + Math.floor(speedAbs / 8));
+  const driftSmokeActive =
+    (handbrakeActive && speedAbs > 3.2 && steerAbs > 0.05)
+    || (Math.abs(physics.driftYaw) > 0.1 && speedAbs > 6);
+
+  if (driftSmokeActive) {
+    spawnDriftSmokeFromRearWheels(state, speedAbs);
   }
 
   const forwardDir = new THREE.Vector3(Math.sin(physics.heading), 0, Math.cos(physics.heading));
