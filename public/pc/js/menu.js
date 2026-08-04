@@ -43,6 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let selectedMode = 'duel';
   let pcFlowStarted = false;
+  const BOOT_CHOICE_DELAY_MS = 20000;
+  let bootRevealTimer = null;
+  let lobbyRevealed = false;
 
   function formatTime(seconds) {
     if (seconds == null) return '--:--.---';
@@ -116,6 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function revealLobby() {
+    if (lobbyRevealed) return;
+    lobbyRevealed = true;
+    if (bootRevealTimer) {
+      window.clearTimeout(bootRevealTimer);
+      bootRevealTimer = null;
+    }
     if (!bootScreen || !lobbyScreen) return;
     bootScreen.classList.add('is-transitioning');
     lobbyScreen.classList.remove('hidden');
@@ -128,13 +137,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function startPcFlow() {
     if (pcFlowStarted) return;
     pcFlowStarted = true;
+    lobbyRevealed = false;
     window.appRole = 'pc';
     if (launchScreen) launchScreen.classList.add('hidden');
     if (bootScreen) bootScreen.classList.remove('hidden');
     if (typeof window.startPcSession === 'function') {
       window.startPcSession();
     }
-    window.setTimeout(revealLobby, 1400);
+    bootRevealTimer = window.setTimeout(revealLobby, BOOT_CHOICE_DELAY_MS);
   }
 
   function startControllerFlow() {
