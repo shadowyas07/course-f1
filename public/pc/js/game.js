@@ -1090,7 +1090,7 @@ function updateCarPhysics(state, dt, wallMode) {
   if (handbrakeActive) {
     steerRate *= PHYSICS_PARAMS.handbrakeSteerBoost;
   }
-  const steerInput = Math.max(-1, Math.min(1, controls.steerAngle || 0));
+  const steerInput = -Math.max(-1, Math.min(1, controls.steerAngle || 0));
   const speedAbs = Math.abs(physics.speed);
   const steerAbs = Math.abs(steerInput);
 
