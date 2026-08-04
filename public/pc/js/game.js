@@ -501,7 +501,7 @@ const canvas = document.getElementById("game-canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 if ("physicallyCorrectLights" in renderer) renderer.physicallyCorrectLights = true;
 if ("useLegacyLights" in renderer) renderer.useLegacyLights = false;
 if ("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -1817,7 +1817,7 @@ rematchBtn.addEventListener("click", () => {
 // Boucle d'animation
 // ============================================================
 
-const clock = new THREE.Clock();
+let lastFrameTime = performance.now();
 let hudAccumulator = 0;
 let minimapAccumulator = 0;
 let fpsAccumulator = 0;
@@ -1875,8 +1875,10 @@ function maybeAdaptQuality(fps, dt) {
 
 function animate() {
   requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.1);
-  const rawDt = clock.elapsedTime ? dt : dt;
+  const now = performance.now();
+  const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
+  lastFrameTime = now;
+  const rawDt = dt;
   const activeCars = getActiveCars();
 
   if (!raceState.paused && !raceLocked) {
