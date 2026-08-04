@@ -105,42 +105,86 @@ const SURFACE_TEXTURES = createSurfaceTextures();
 // Configuration du circuit (layout inspire de Spa-Francorchamps)
 // ============================================================
 const TRACK = {
-  roadHalfWidth: 8.6,
+  roadHalfWidth: 8.1,
   curbWidth: 1.15,
   perimeter: 0,
 };
 const WALL_BOUNDARY = TRACK.roadHalfWidth + TRACK.curbWidth;
 
 const SPA_CONTROL_POINTS = [
-  { x: -78, z: 34 },
-  { x: -66, z: 24 },
-  { x: -56, z: 10 },
-  { x: -46, z: -2 },
-  { x: -34, z: -7 },
-  { x: -22, z: -18 },
-  { x: 5, z: -28 },
-  { x: 14, z: -24 },
-  { x: 24, z: -26 },
-  { x: 42, z: -5 },
-  { x: 30, z: 8 },
-  { x: 7, z: 14 },
-  { x: 20, z: 28 },
-  { x: 18, z: 40 },
-  { x: 38, z: 52 },
-  { x: 27, z: 71 },
-  { x: 2, z: 62 },
-  { x: -14, z: 41 },
-  { x: -34, z: 31 },
-  { x: -52, z: 35 },
-  { x: -63, z: 40 },
+  { x: -84, z: 29 },
+  { x: -75, z: 19 },
+  { x: -64, z: 7 },
+  { x: -50, z: -7 },
+  { x: -36, z: -11 },
+  { x: -23, z: -22 },
+  { x: 5, z: -31 },
+  { x: 18, z: -27 },
+  { x: 31, z: -25 },
+  { x: 45, z: -8 },
+  { x: 39, z: 6 },
+  { x: 24, z: 12 },
+  { x: 8, z: 16 },
+  { x: 8, z: 32 },
+  { x: 21, z: 47 },
+  { x: 36, z: 54 },
+  { x: 30, z: 70 },
+  { x: 6, z: 74 },
+  { x: -16, z: 64 },
+  { x: -26, z: 49 },
+  { x: -44, z: 37 },
+  { x: -58, z: 36 },
+  { x: -72, z: 40 },
 ];
 
-const TRACK_SAMPLES = 360;
+const TRACK_SAMPLES = 420;
+
+function smoothClosedPath(points, iterations = 2) {
+  let out = points.slice();
+  for (let it = 0; it < iterations; it++) {
+    const next = [];
+    for (let i = 0; i < out.length; i++) {
+      const a = out[i];
+      const b = out[(i + 1) % out.length];
+      next.push({ x: 0.75 * a.x + 0.25 * b.x, z: 0.75 * a.z + 0.25 * b.z });
+      next.push({ x: 0.25 * a.x + 0.75 * b.x, z: 0.25 * a.z + 0.75 * b.z });
+    }
+    out = next;
+  }
+  return out;
+}
+
+function sampleClosedPolyline(points, samples) {
+  const cumulative = [0];
+  let total = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    total += Math.hypot(b.x - a.x, b.z - a.z);
+    cumulative.push(total);
+  }
+
+  const sampled = [];
+  for (let i = 0; i < samples; i++) {
+    const target = (i / samples) * total;
+    let seg = 0;
+    while (seg < points.length - 1 && cumulative[seg + 1] < target) seg += 1;
+    const a = points[seg];
+    const b = points[(seg + 1) % points.length];
+    const start = cumulative[seg];
+    const segLen = Math.max(0.0001, cumulative[seg + 1] - start);
+    const t = (target - start) / segLen;
+    sampled.push({
+      x: a.x + (b.x - a.x) * t,
+      z: a.z + (b.z - a.z) * t,
+    });
+  }
+  return sampled;
+}
 
 function buildSpaCenterPoints(samples) {
-  const control = SPA_CONTROL_POINTS.map((p) => new THREE.Vector3(p.x, 0, p.z));
-  const curve = new THREE.CatmullRomCurve3(control, true, "centripetal", 0.45);
-  return curve.getPoints(samples - 1).map((p) => ({ x: p.x, z: p.z }));
+  const smoothed = smoothClosedPath(SPA_CONTROL_POINTS, 2);
+  return sampleClosedPolyline(smoothed, samples);
 }
 
 const centerPoints = buildSpaCenterPoints(TRACK_SAMPLES);
@@ -326,7 +370,7 @@ function buildStartLine() {
     tile.rotation.x = -Math.PI / 2;
     const lateral = -TRACK.roadHalfWidth + tileW * i + tileW / 2;
     tile.position.set(frame.x + frame.nx * lateral, 0.03, frame.z + frame.nz * lateral);
-    tile.rotation.z = Math.atan2(frame.tx, frame.tz);
+    tile.rotation.y = Math.atan2(frame.tx, frame.tz);
     tile.receiveShadow = true;
     group.add(tile);
   }
