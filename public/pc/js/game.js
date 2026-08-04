@@ -102,42 +102,138 @@ function createSurfaceTextures() {
 const SURFACE_TEXTURES = createSurfaceTextures();
 
 // ============================================================
-// Configuration du circuit (forme "stade" : 2 lignes droites + 2 virages)
+// Configuration du circuit (layout inspire de Spa-Francorchamps)
 // ============================================================
 const TRACK = {
-  straightLength: 70,
-  turnRadius: 28,
-  roadHalfWidth: 9,
-  curbWidth: 1.2,
+  roadHalfWidth: 8.6,
+  curbWidth: 1.15,
+  perimeter: 0,
 };
-TRACK.perimeter = 2 * TRACK.straightLength + 2 * Math.PI * TRACK.turnRadius;
 const WALL_BOUNDARY = TRACK.roadHalfWidth + TRACK.curbWidth;
 
-function trackPointAt(s) {
-  const { straightLength: L, turnRadius: R, perimeter } = TRACK;
-  s = ((s % perimeter) + perimeter) % perimeter;
+const SPA_CONTROL_POINTS = [
+  { x: -78, z: 34 },
+  { x: -66, z: 24 },
+  { x: -56, z: 10 },
+  { x: -46, z: -2 },
+  { x: -34, z: -7 },
+  { x: -22, z: -18 },
+  { x: 5, z: -28 },
+  { x: 14, z: -24 },
+  { x: 24, z: -26 },
+  { x: 42, z: -5 },
+  { x: 30, z: 8 },
+  { x: 7, z: 14 },
+  { x: 20, z: 28 },
+  { x: 18, z: 40 },
+  { x: 38, z: 52 },
+  { x: 27, z: 71 },
+  { x: 2, z: 62 },
+  { x: -14, z: 41 },
+  { x: -34, z: 31 },
+  { x: -52, z: 35 },
+  { x: -63, z: 40 },
+];
 
-  if (s < L) return { x: R, z: -L / 2 + s };
-  s -= L;
+const TRACK_SAMPLES = 360;
 
-  if (s < Math.PI * R) {
-    const theta = s / R;
-    return { x: R * Math.cos(theta), z: L / 2 + R * Math.sin(theta) };
+function buildSpaCenterPoints(samples) {
+  const control = SPA_CONTROL_POINTS.map((p) => new THREE.Vector3(p.x, 0, p.z));
+  const curve = new THREE.CatmullRomCurve3(control, true, "centripetal", 0.45);
+  return curve.getPoints(samples - 1).map((p) => ({ x: p.x, z: p.z }));
+}
+
+const centerPoints = buildSpaCenterPoints(TRACK_SAMPLES);
+
+function buildTrackArcLengths(points) {
+  const lengths = [0];
+  let total = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    total += Math.hypot(b.x - a.x, b.z - a.z);
+    lengths.push(total);
   }
-  s -= Math.PI * R;
-
-  if (s < L) return { x: -R, z: L / 2 - s };
-  s -= L;
-
-  const theta = s / R;
-  return { x: -R * Math.cos(theta), z: -L / 2 - R * Math.sin(theta) };
+  return { lengths, total };
 }
 
-const TRACK_SAMPLES = 220;
-const centerPoints = [];
-for (let i = 0; i < TRACK_SAMPLES; i++) {
-  centerPoints.push(trackPointAt((i / TRACK_SAMPLES) * TRACK.perimeter));
+const trackArc = buildTrackArcLengths(centerPoints);
+TRACK.perimeter = trackArc.total;
+
+function trackPointAt(distance) {
+  const perimeter = TRACK.perimeter;
+  let s = ((distance % perimeter) + perimeter) % perimeter;
+  const lengths = trackArc.lengths;
+  const n = centerPoints.length;
+
+  let seg = 0;
+  while (seg < n && lengths[seg + 1] < s) seg += 1;
+  const a = centerPoints[seg % n];
+  const b = centerPoints[(seg + 1) % n];
+  const segStart = lengths[seg];
+  const segLen = Math.max(0.0001, lengths[seg + 1] - segStart);
+  const t = (s - segStart) / segLen;
+  return {
+    x: a.x + (b.x - a.x) * t,
+    z: a.z + (b.z - a.z) * t,
+  };
 }
+
+function trackFrameAt(distance) {
+  const p = trackPointAt(distance);
+  const p2 = trackPointAt(distance + 0.9);
+  const tx = p2.x - p.x;
+  const tz = p2.z - p.z;
+  const len = Math.hypot(tx, tz) || 1;
+  const dirX = tx / len;
+  const dirZ = tz / len;
+  return {
+    x: p.x,
+    z: p.z,
+    tx: dirX,
+    tz: dirZ,
+    nx: -dirZ,
+    nz: dirX,
+  };
+}
+
+function computeTrackBounds(points) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    centerX: (minX + maxX) * 0.5,
+    centerZ: (minZ + maxZ) * 0.5,
+    halfExtent: Math.max(maxX - minX, maxZ - minZ) * 0.5,
+  };
+}
+
+const TRACK_BOUNDS = computeTrackBounds(centerPoints);
+const START_DISTANCE = TRACK.perimeter * 0.012;
+
+function buildStartGrid() {
+  const laneOffset = 2.6;
+  const frame1 = trackFrameAt(START_DISTANCE - 4.8);
+  const frame2 = trackFrameAt(START_DISTANCE - 7.2);
+  const heading = Math.atan2(frame1.tx, frame1.tz);
+  return {
+    car1: { x: frame1.x + frame1.nx * laneOffset, z: frame1.z + frame1.nz * laneOffset, heading },
+    car2: { x: frame2.x - frame2.nx * laneOffset, z: frame2.z - frame2.nz * laneOffset, heading },
+  };
+}
+
+const START_GRID = buildStartGrid();
 
 const PERF = {
   hudInterval: 1 / 12,
@@ -219,6 +315,7 @@ function buildTrackDecorations() {
 
 function buildStartLine() {
   const group = new THREE.Group();
+  const frame = trackFrameAt(START_DISTANCE);
   const cols = 10;
   const tileW = (TRACK.roadHalfWidth * 2) / cols;
   const tileD = 1.6;
@@ -227,7 +324,9 @@ function buildStartLine() {
     const mat = new THREE.MeshStandardMaterial({ color: even ? 0xffffff : 0x111111, roughness: 0.8 });
     const tile = new THREE.Mesh(new THREE.PlaneGeometry(tileW, tileD), mat);
     tile.rotation.x = -Math.PI / 2;
-    tile.position.set(TRACK.turnRadius - TRACK.roadHalfWidth + tileW * i + tileW / 2, 0.03, -TRACK.straightLength / 2 + 0.05);
+    const lateral = -TRACK.roadHalfWidth + tileW * i + tileW / 2;
+    tile.position.set(frame.x + frame.nx * lateral, 0.03, frame.z + frame.nz * lateral);
+    tile.rotation.z = Math.atan2(frame.tx, frame.tz);
     tile.receiveShadow = true;
     group.add(tile);
   }
@@ -323,24 +422,18 @@ function buildScenery() {
   const leafDummy = new THREE.Object3D();
   for (let i = 0; i < count; i++) {
     const s = (i / count) * TRACK.perimeter + (Math.random() - 0.5) * 4;
-    const p = trackPointAt(s);
-    const s2 = trackPointAt(s + 0.5);
-    const tx = s2.x - p.x;
-    const tz = s2.z - p.z;
-    const len = Math.hypot(tx, tz) || 1;
-    const nx = -tz / len;
-    const nz = tx / len;
+    const frame = trackFrameAt(s);
     const side = i % 2 === 0 ? 1 : -1;
     const dist = minClear + Math.random() * 22;
     const scale = 0.8 + Math.random() * 0.7;
 
-    trunkDummy.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
+    trunkDummy.position.set(frame.x + frame.nx * dist * side, 0, frame.z + frame.nz * dist * side);
     trunkDummy.scale.set(scale, scale, scale);
     trunkDummy.rotation.y = Math.random() * Math.PI * 2;
     trunkDummy.updateMatrix();
     trunkInstanced.setMatrixAt(i, trunkDummy.matrix);
 
-    leafDummy.position.set(p.x + nx * dist * side, 1.8 * scale, p.z + nz * dist * side);
+    leafDummy.position.set(frame.x + frame.nx * dist * side, 1.8 * scale, frame.z + frame.nz * dist * side);
     leafDummy.scale.set(scale, scale, scale);
     leafDummy.rotation.y = trunkDummy.rotation.y;
     leafDummy.updateMatrix();
@@ -1130,10 +1223,13 @@ function createCarState(playerId, bodyColor, startX, startZ) {
   };
 }
 
-const car1 = createCarState(1, 0xff4f3c, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
-const car2 = createCarState(2, 0x2f7dff, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
+const car1 = createCarState(1, 0xff4f3c, START_GRID.car1.x, START_GRID.car1.z);
+const car2 = createCarState(2, 0x2f7dff, START_GRID.car2.x, START_GRID.car2.z);
 const cars = [car1, car2];
 const soloCars = [car1];
+
+car1.physics.heading = START_GRID.car1.heading;
+car2.physics.heading = START_GRID.car2.heading;
 
 function getActiveCars() {
   return isSoloMode() ? soloCars : cars;
@@ -1714,8 +1810,8 @@ const minimapCanvas = document.getElementById("minimap");
 const minimapCtx = minimapCanvas ? minimapCanvas.getContext("2d") : null;
 
 function drawCarDot(ctx, cx, cy, scale, physics, color) {
-  const x = cx + physics.x * scale;
-  const y = cy + physics.z * scale;
+  const x = cx + (physics.x - TRACK_BOUNDS.centerX) * scale;
+  const y = cy + (physics.z - TRACK_BOUNDS.centerZ) * scale;
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(physics.heading);
@@ -1736,15 +1832,15 @@ function drawMinimap() {
   minimapCtx.clearRect(0, 0, w, h);
 
   const margin = 14;
-  const extent = TRACK.turnRadius + TRACK.straightLength / 2 + 20;
+  const extent = TRACK_BOUNDS.halfExtent + 20;
   const scale = Math.min(w, h) / 2 / extent - margin / extent;
   const cx = w / 2;
   const cy = h / 2;
 
   minimapCtx.beginPath();
   centerPoints.forEach((p, i) => {
-    const px = cx + p.x * scale;
-    const py = cy + p.z * scale;
+    const px = cx + (p.x - TRACK_BOUNDS.centerX) * scale;
+    const py = cy + (p.z - TRACK_BOUNDS.centerZ) * scale;
     if (i === 0) minimapCtx.moveTo(px, py);
     else minimapCtx.lineTo(px, py);
   });
@@ -1771,10 +1867,10 @@ const rematchBtn = document.getElementById("rematch-btn");
 
 let raceLocked = true;
 
-function resetCarState(state, startX, startZ) {
+function resetCarState(state, startX, startZ, startHeading = 0) {
   state.physics.x = startX;
   state.physics.z = startZ;
-  state.physics.heading = 0;
+  state.physics.heading = startHeading;
   state.physics.speed = 0;
   state.physics.driftYaw = 0;
   state.physics.velocity.set(0, 0, 0);
@@ -1784,7 +1880,11 @@ function resetCarState(state, startX, startZ) {
   state.race.bestLapTime = null;
   state.race.prevSampleIndex = 0;
   state.race.finished = false;
-  state.currentCamPos.set(startX, cameraRig.height, startZ - cameraRig.distance);
+  state.currentCamPos.set(
+    startX - Math.sin(startHeading) * cameraRig.distance,
+    cameraRig.height,
+    startZ - Math.cos(startHeading) * cameraRig.distance
+  );
 }
 
 function runCountdown() {
@@ -1821,9 +1921,9 @@ window.startRace = function startRace() {
   raceState.paused = false;
   setPauseOverlay(false);
 
-  resetCarState(car1, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
+  resetCarState(car1, START_GRID.car1.x, START_GRID.car1.z, START_GRID.car1.heading);
   if (!solo) {
-    resetCarState(car2, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
+    resetCarState(car2, START_GRID.car2.x, START_GRID.car2.z, START_GRID.car2.heading);
   }
 
   applyModeVisualState();
