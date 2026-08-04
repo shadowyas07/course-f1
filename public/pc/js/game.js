@@ -626,6 +626,12 @@ const PHYSICS_PARAMS = {
   grassMaxSpeedFactor: 0.45,
   grassFriction: 26,
   wallImpactFactor: 0.35, // vitesse conservée après un choc contre le mur
+  handbrakeDeceleration: 30,
+  handbrakeSteerBoost: 1.65,
+  handbrakeMinSpeed: 7,
+  driftBuildRate: 1.9,
+  driftRecoverRate: 4.2,
+  driftMaxAngle: 0.44,
 };
 
 /**
@@ -704,7 +710,7 @@ function createCarState(playerId, bodyColor, startX, startZ) {
   return {
     playerId,
     parts,
-    physics: { x: startX, z: startZ, heading: 0, speed: 0 },
+    physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0 },
     race: {
       lap: 1,
       lapStartTime: 0,
@@ -767,7 +773,7 @@ window.addEventListener("mode-changed", () => {
 applyModeVisualState();
 
 function getControls(playerId) {
-  const fallback = { steerAngle: 0, gasPressed: false, brakePressed: false };
+  const fallback = { steerAngle: 0, gasPressed: false, brakePressed: false, handbrakePressed: false };
   if (playerId === 2) return window.carControls2 || fallback;
   return window.carControls1 || fallback;
 }
@@ -801,7 +807,11 @@ function updateCarPhysics(state, dt, wallMode) {
   physics.speed = Math.max(-maxSpeedNow * 0.4, Math.min(maxSpeedNow, physics.speed));
 
   const speedRatio = Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed);
-  const steerRate = PHYSICS_PARAMS.minSteerRate + speedRatio * (PHYSICS_PARAMS.maxSteerRate - PHYSICS_PARAMS.minSteerRate);
+  const handbrakeActive = !!controls.handbrakePressed;
+  let steerRate = PHYSICS_PARAMS.minSteerRate + speedRatio * (PHYSICS_PARAMS.maxSteerRate - PHYSICS_PARAMS.minSteerRate);
+  if (handbrakeActive) {
+    steerRate *= PHYSICS_PARAMS.handbrakeSteerBoost;
+  }
   const steerInput = Math.max(-1, Math.min(1, controls.steerAngle || 0));
 
   if (Math.abs(physics.speed) > 0.3) {
@@ -809,8 +819,23 @@ function updateCarPhysics(state, dt, wallMode) {
     physics.heading -= steerInput * steerRate * dt * direction;
   }
 
-  physics.x += Math.sin(physics.heading) * physics.speed * dt;
-  physics.z += Math.cos(physics.heading) * physics.speed * dt;
+  if (handbrakeActive) {
+    const hb = PHYSICS_PARAMS.handbrakeDeceleration * dt;
+    if (physics.speed > 0) physics.speed = Math.max(0, physics.speed - hb);
+    else if (physics.speed < 0) physics.speed = Math.min(0, physics.speed + hb);
+  }
+
+  const canDrift = handbrakeActive && Math.abs(physics.speed) > PHYSICS_PARAMS.handbrakeMinSpeed;
+  if (canDrift) {
+    const driftTarget = steerInput * PHYSICS_PARAMS.driftMaxAngle * speedRatio;
+    physics.driftYaw += (driftTarget - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
+  } else {
+    physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftRecoverRate);
+  }
+
+  const motionHeading = physics.heading + physics.driftYaw;
+  physics.x += Math.sin(motionHeading) * physics.speed * dt;
+  physics.z += Math.cos(motionHeading) * physics.speed * dt;
 
   // --- Limites de terrain ---
   if (wallMode) {
@@ -827,11 +852,13 @@ function updateCarPhysics(state, dt, wallMode) {
     }
   } else if (trackInfo.offTrack && Math.abs(physics.speed) > 2) {
     spawnDust(physics.x, physics.z, 2);
+  } else if (canDrift && Math.abs(steerInput) > 0.2) {
+    spawnDust(physics.x, physics.z, 2);
   } else if (controls.brakePressed && Math.abs(physics.speed) > PHYSICS_PARAMS.maxSpeed * 0.5) {
     spawnDust(physics.x, physics.z, 1);
   }
 
-  return { steerInput, trackInfo };
+  return { steerInput, trackInfo, handbrakeActive };
 }
 
 // ============================================================
@@ -1143,6 +1170,7 @@ function resetCarState(state, startX, startZ) {
   state.physics.z = startZ;
   state.physics.heading = 0;
   state.physics.speed = 0;
+  state.physics.driftYaw = 0;
   state.race.lap = 1;
   state.race.lapStartTime = 0;
   state.race.lastLapTime = null;
@@ -1272,12 +1300,12 @@ function animate() {
   if (!raceLocked) {
     raceState.elapsed += dt;
     for (const state of activeCars) {
-      const { steerInput, trackInfo } = updateCarPhysics(state, dt, raceState.wallMode);
+      const { steerInput, trackInfo, handbrakeActive } = updateCarPhysics(state, dt, raceState.wallMode);
       updateLapTracking(state, trackInfo.index);
-      applyVisuals(state, steerInput, dt);
+      applyVisuals(state, steerInput, dt, handbrakeActive);
     }
   } else {
-    for (const state of activeCars) applyVisuals(state, 0, dt);
+    for (const state of activeCars) applyVisuals(state, 0, dt, false);
   }
 
   hudAccumulator += dt;
@@ -1311,7 +1339,7 @@ function animate() {
   }
 }
 
-function applyVisuals(state, steerInput, dt) {
+function applyVisuals(state, steerInput, dt, handbrakeActive) {
   const { group, frontWheelPivots, rollingWheels, brakeLights } = state.parts;
   group.position.set(state.physics.x, 0, state.physics.z);
   group.rotation.y = state.physics.heading;
@@ -1329,7 +1357,7 @@ function applyVisuals(state, steerInput, dt) {
 
   const braking = !!getControls(state.playerId).brakePressed;
   brakeLights.forEach((bl) => {
-    bl.material.emissiveIntensity = braking ? 1.6 : 0.4;
+    bl.material.emissiveIntensity = braking || handbrakeActive ? 1.6 : 0.4;
   });
 }
 

@@ -243,6 +243,8 @@ io.on("connection", (socket) => {
   socket.on("gas_release", forwardToPc("gas_release"));
   socket.on("brake_press", forwardToPc("brake_press"));
   socket.on("brake_release", forwardToPc("brake_release"));
+  socket.on("handbrake_press", forwardToPc("handbrake_press"));
+  socket.on("handbrake_release", forwardToPc("handbrake_release"));
 
   /**
    * Nettoyage à la déconnexion.

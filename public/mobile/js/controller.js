@@ -25,6 +25,7 @@ const leftBtn = document.getElementById("left-btn");
 const rightBtn = document.getElementById("right-btn");
 const gasBtn = document.getElementById("gas-btn");
 const brakeBtn = document.getElementById("brake-btn");
+const handbrakeBtn = document.getElementById("handbrake-btn");
 const pauseBtn = document.getElementById("pause-btn");
 
 const roomIdDisplay = document.getElementById("room-id-display");
@@ -325,6 +326,7 @@ pauseBtn.addEventListener("click", () => {
   if (isPaused) {
     socket.emit("gas_release");
     socket.emit("brake_release");
+    socket.emit("handbrake_release");
     setStatus("error", "⏸️ PAUSE");
   } else {
     setStatus("connected", "🟢 CONNECTÉ");
@@ -543,6 +545,7 @@ function bindSteerButton(btnEl, side) {
 
 bindPressRelease(gasBtn, "gas_press", "gas_release");
 bindPressRelease(brakeBtn, "brake_press", "brake_release");
+bindPressRelease(handbrakeBtn, "handbrake_press", "handbrake_release");
 
 setSteerMode("wheel");
 

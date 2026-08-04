@@ -565,6 +565,12 @@ html, body {
   box-shadow: 0 6px 18px rgba(79, 209, 197, 0.35);
 }
 
+.handbrake-btn {
+  background: linear-gradient(160deg, #ffd166, #d79a19);
+  color: #231700;
+  box-shadow: 0 6px 18px rgba(255, 209, 102, 0.35);
+}
+
 .control-btn.active {
   transform: scale(0.94);
   filter: brightness(1.15);

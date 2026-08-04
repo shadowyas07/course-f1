@@ -13,7 +13,7 @@
 const socket = io();
 
 function freshControls() {
-  return { steerAngle: 0, gasPressed: false, brakePressed: false, connected: false };
+  return { steerAngle: 0, gasPressed: false, brakePressed: false, handbrakePressed: false, connected: false };
 }
 window.carControls1 = freshControls();
 window.carControls2 = freshControls();
@@ -93,6 +93,7 @@ socket.on("player-left", ({ player }) => {
   controls.connected = false;
   controls.gasPressed = false;
   controls.brakePressed = false;
+  controls.handbrakePressed = false;
   statusEl.textContent = "⏳ En attente...";
   statusEl.classList.remove("connected");
   statusEl.classList.add("waiting");
@@ -157,4 +158,12 @@ socket.on("brake_press", ({ player }) => {
 
 socket.on("brake_release", ({ player }) => {
   controlsFor(player).brakePressed = false;
+});
+
+socket.on("handbrake_press", ({ player }) => {
+  controlsFor(player).handbrakePressed = true;
+});
+
+socket.on("handbrake_release", ({ player }) => {
+  controlsFor(player).handbrakePressed = false;
 });
