@@ -35,6 +35,108 @@ html, body {
   display: none !important;
 }
 
+#pause-menu {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(3, 6, 14, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.pause-menu-card {
+  width: min(540px, 96vw);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(155deg, rgba(24, 28, 42, 0.96), rgba(8, 10, 18, 0.96));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  padding: 16px 14px;
+  text-align: left;
+}
+
+.pause-menu-card h3 {
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd36f;
+  margin-bottom: 12px;
+}
+
+.pause-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: #d7def5;
+}
+
+.pause-setting label,
+.pause-setting span {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+#setting-sensitivity-value {
+  color: #7bf0e3;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.pause-setting input[type="range"],
+.pause-setting select {
+  width: 100%;
+  border-radius: 8px;
+}
+
+.pause-setting select {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(9, 12, 20, 0.82);
+  color: #e7ecff;
+  padding: 8px;
+}
+
+.pause-check label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.pause-mode-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pause-mode-actions button,
+#pause-resume-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e9eeff;
+  font-weight: 700;
+  padding: 10px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pause-actions {
+  margin-top: 8px;
+}
+
+#pause-resume-btn {
+  width: 100%;
+  background: linear-gradient(145deg, #ffd166, #d79a19);
+  color: #1d1300;
+}
+
 /* ============================================================
    Décor asphalte / circuit stylisé (100% CSS, aucune image externe)
    ============================================================ */

@@ -113,6 +113,47 @@
         <span class="btn-label">GAZ<br/>ACCÉL</span>
       </button>
     </div>
+
+    <div id="pause-menu" class="hidden" aria-hidden="true">
+      <div class="pause-menu-card">
+        <h3>Pause · Réglages rapides</h3>
+
+        <div class="pause-setting">
+          <label for="setting-sensitivity">Sensibilité direction</label>
+          <input id="setting-sensitivity" type="range" min="60" max="160" step="5" value="100" />
+          <span id="setting-sensitivity-value">100%</span>
+        </div>
+
+        <div class="pause-setting">
+          <label for="setting-rate">Fréquence d'envoi</label>
+          <select id="setting-rate">
+            <option value="60" selected>60 Hz</option>
+            <option value="30">30 Hz</option>
+            <option value="20">20 Hz</option>
+          </select>
+        </div>
+
+        <div class="pause-setting pause-check">
+          <label>
+            <input id="setting-vibration" type="checkbox" checked />
+            Vibrations activées
+          </label>
+        </div>
+
+        <div class="pause-setting">
+          <span>Mode de direction</span>
+          <div class="pause-mode-actions">
+            <button type="button" data-pause-mode="wheel">Volant</button>
+            <button type="button" data-pause-mode="tilt">Inclinaison</button>
+            <button type="button" data-pause-mode="buttons">Boutons</button>
+          </div>
+        </div>
+
+        <div class="pause-actions">
+          <button id="pause-resume-btn" type="button">Reprendre</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

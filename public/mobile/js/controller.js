@@ -27,6 +27,13 @@ const gasBtn = document.getElementById("gas-btn");
 const brakeBtn = document.getElementById("brake-btn");
 const handbrakeBtn = document.getElementById("handbrake-btn");
 const pauseBtn = document.getElementById("pause-btn");
+const pauseMenu = document.getElementById("pause-menu");
+const pauseResumeBtn = document.getElementById("pause-resume-btn");
+const settingSensitivity = document.getElementById("setting-sensitivity");
+const settingSensitivityValue = document.getElementById("setting-sensitivity-value");
+const settingRate = document.getElementById("setting-rate");
+const settingVibration = document.getElementById("setting-vibration");
+const pauseModeButtons = Array.from(document.querySelectorAll("[data-pause-mode]"));
 
 const roomIdDisplay = document.getElementById("room-id-display");
 const statusLine = document.getElementById("status-line");
@@ -44,7 +51,7 @@ let isPaused = false;
 let lastSentSteer = 0;
 let wheelSendTimer = null;
 let lastPacketTs = 0;
-const INPUT_THROTTLE_MS = 16;
+let INPUT_THROTTLE_MS = 16;
 let steerMode = "wheel";
 let tiltAvailable = typeof window.DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function";
 let tiltPermissionState = "unknown";
@@ -56,6 +63,8 @@ let activeBrake = false;
 let activeHandbrake = false;
 let pendingJoinRequest = autoJoinRequest;
 let wakeLockSentinel = null;
+let steeringSensitivity = 1;
+let vibrationEnabled = true;
 
 if (tiltAvailable) {
   tiltPermissionState = "granted";
@@ -265,7 +274,7 @@ socket.on("joined-room", async ({ success, message, player }) => {
 });
 
 socket.on("game-haptic", ({ intensity = 1 } = {}) => {
-  if (navigator.vibrate) {
+  if (vibrationEnabled && navigator.vibrate) {
     navigator.vibrate(Math.max(12, Math.round(Number(intensity) * 70)));
   }
 });
@@ -332,8 +341,12 @@ function setSteerMode(mode) {
 
 pauseBtn.addEventListener("click", () => {
   isPaused = !isPaused;
-  controllerScreen.style.opacity = isPaused ? "0.45" : "1";
+  controllerScreen.style.opacity = isPaused ? "0.6" : "1";
   pauseBtn.classList.toggle("active", isPaused);
+  if (pauseMenu) {
+    pauseMenu.classList.toggle("hidden", !isPaused);
+    pauseMenu.setAttribute("aria-hidden", isPaused ? "false" : "true");
+  }
   if (isPaused) {
     socket.emit("gas_release");
     socket.emit("brake_release");
@@ -342,6 +355,50 @@ pauseBtn.addEventListener("click", () => {
   } else {
     setStatus("connected", "🟢 CONNECTÉ");
   }
+});
+
+if (pauseResumeBtn) {
+  pauseResumeBtn.addEventListener("click", () => {
+    isPaused = false;
+    controllerScreen.style.opacity = "1";
+    pauseBtn.classList.remove("active");
+    if (pauseMenu) {
+      pauseMenu.classList.add("hidden");
+      pauseMenu.setAttribute("aria-hidden", "true");
+    }
+    setStatus("connected", "🟢 CONNECTÉ");
+  });
+}
+
+if (settingSensitivity && settingSensitivityValue) {
+  const syncSensitivity = () => {
+    steeringSensitivity = Number(settingSensitivity.value) / 100;
+    settingSensitivityValue.textContent = `${settingSensitivity.value}%`;
+  };
+  settingSensitivity.addEventListener("input", syncSensitivity);
+  syncSensitivity();
+}
+
+if (settingRate) {
+  const syncRate = () => {
+    const hz = Number(settingRate.value) || 60;
+    INPUT_THROTTLE_MS = Math.max(8, Math.round(1000 / hz));
+    startWheelSending();
+  };
+  settingRate.addEventListener("change", syncRate);
+  syncRate();
+}
+
+if (settingVibration) {
+  settingVibration.addEventListener("change", () => {
+    vibrationEnabled = !!settingVibration.checked;
+  });
+}
+
+pauseModeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setSteerMode(btn.dataset.pauseMode || "wheel");
+  });
 });
 
 steerModeBtns.forEach((btn) => {
@@ -476,7 +533,7 @@ function sendCompactInput() {
     steeringSource = next;
   }
 
-  const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource));
+  const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource * steeringSensitivity));
   const direction = Number((-clamped / STEER_EFFECTIVE_RANGE).toFixed(3));
   const payload = [direction, activeGas ? 1 : 0, activeBrake ? 1 : 0, activeHandbrake ? 1 : 0];
   if (Math.abs(direction - lastSentSteer) < 0.001 && payload[1] === 0 && payload[2] === 0 && payload[3] === 0) return;
@@ -486,7 +543,7 @@ function sendCompactInput() {
 
 function startWheelSending() {
   if (wheelSendTimer) clearInterval(wheelSendTimer);
-  wheelSendTimer = setInterval(sendCompactInput, 16);
+  wheelSendTimer = setInterval(sendCompactInput, INPUT_THROTTLE_MS);
 }
 
 function handleTiltEvent(event) {
@@ -590,7 +647,7 @@ function bindPressRelease(btnEl, pressEvent, releaseEvent) {
     if (pressEvent === "brake_press") activeBrake = true;
     if (pressEvent === "handbrake_press") activeHandbrake = true;
     emitCompactState();
-    if (navigator.vibrate) navigator.vibrate(15);
+    if (vibrationEnabled && navigator.vibrate) navigator.vibrate(15);
   };
 
   const release = (e) => {

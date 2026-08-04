@@ -883,8 +883,8 @@ function spawnSmoke(x, z, count) {
     smokePositions[i * 3] = x + (Math.random() - 0.5) * 1.35;
     smokePositions[i * 3 + 1] = 0.22;
     smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 1.35;
-    smokeVelocities[i].set((Math.random() - 0.5) * 1.25, 1.4 + Math.random() * 1.5, (Math.random() - 0.5) * 1.25);
-    smokeLife[i] = 1.05 + Math.random() * 0.9;
+    smokeVelocities[i].set((Math.random() - 0.5) * 1.0, 1.05 + Math.random() * 1.1, (Math.random() - 0.5) * 1.0);
+    smokeLife[i] = 0.28 + Math.random() * 0.32;
   }
   smokeNeedsUpload = true;
 }
@@ -977,7 +977,7 @@ function updateSmoke(dt) {
   let dirty = false;
   for (let i = 0; i < smokeCount; i++) {
     if (smokeLife[i] <= 0) continue;
-    smokeLife[i] -= dt;
+    smokeLife[i] -= dt * 1.95;
     if (smokeLife[i] <= 0) {
       smokePositions[i * 3 + 1] = -100;
       dirty = true;
@@ -986,9 +986,9 @@ function updateSmoke(dt) {
     smokePositions[i * 3] += smokeVelocities[i].x * dt;
     smokePositions[i * 3 + 1] += smokeVelocities[i].y * dt;
     smokePositions[i * 3 + 2] += smokeVelocities[i].z * dt;
-    smokeVelocities[i].y += 0.35 * dt;
-    smokeVelocities[i].x *= 0.992;
-    smokeVelocities[i].z *= 0.992;
+    smokeVelocities[i].y += 0.45 * dt;
+    smokeVelocities[i].x *= 0.965;
+    smokeVelocities[i].z *= 0.965;
     dirty = true;
   }
   if (dirty || smokeNeedsUpload) {
