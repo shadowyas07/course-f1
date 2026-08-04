@@ -2,12 +2,17 @@
  * controller.js (Mobile) - Volant tactile + HUD stylé
  */
 
-const socket = io();
+const isCapacitorApp = typeof window.Capacitor !== "undefined";
+const SOCKET_URL = isCapacitorApp ? "https://votre-app.onrender.com" : window.location.origin;
+const socket = io(SOCKET_URL, { transports: ["websocket", "polling"] });
 
 // --- Éléments DOM ---
 const startScreen = document.getElementById("start-screen");
 const startStatus = document.getElementById("start-status");
 const startError = document.getElementById("start-error");
+const joinForm = document.getElementById("join-form");
+const roomInput = document.getElementById("room-input");
+const joinPlayerInputs = Array.from(document.querySelectorAll('input[name="join-player"]'));
 
 const controllerScreen = document.getElementById("controller-screen");
 const wheelEl = document.getElementById("wheel");
@@ -26,82 +31,258 @@ const roomIdDisplay = document.getElementById("room-id-display");
 const statusLine = document.getElementById("status-line");
 
 // --- Room ---
-function getRoomIdFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get("room");
-}
-function getPlayerFromUrl() {
-  const params = new URLSearchParams(window.location.search);
-  const p = Number(params.get("player"));
-  return p === 2 ? 2 : 1;
-}
-const roomId = getRoomIdFromUrl();
-const requestedPlayer = getPlayerFromUrl();
 const playerBadge = document.getElementById("player-badge");
+
+const searchParams = new URLSearchParams(window.location.search);
+const hasRoomParams = searchParams.has("room") && searchParams.has("player");
+const initialRoomId = hasRoomParams ? (searchParams.get("room") || "").trim().toUpperCase() : "";
+const initialPlayer = hasRoomParams ? (Number(searchParams.get("player")) === 2 ? 2 : 1) : 1;
+const autoJoinRequest = hasRoomParams && initialRoomId ? { roomId: initialRoomId, player: initialPlayer } : null;
 
 let isPaused = false;
 let lastSentSteer = 0;
 let wheelSendTimer = null;
 let steerMode = "wheel";
-let tiltAvailable = false;
+let tiltAvailable = typeof window.DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function";
 let tiltPermissionState = "unknown";
 let tiltSmoothedGamma = 0;
 let buttonLeftPressed = false;
 let buttonRightPressed = false;
+let pendingJoinRequest = autoJoinRequest;
+let wakeLockSentinel = null;
 
-if (typeof window.DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function") {
-  tiltAvailable = true;
+if (tiltAvailable) {
   tiltPermissionState = "granted";
+}
+
+function normalizeRoomCode(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .toUpperCase()
+    .slice(0, 6);
+}
+
+function getSelectedJoinPlayer() {
+  const selected = joinPlayerInputs.find((input) => input.checked);
+  return selected && Number(selected.value) === 2 ? 2 : 1;
+}
+
+function setStartError(message) {
+  if (!startError) return;
+  if (!message) {
+    startError.textContent = "";
+    startError.classList.add("hidden");
+    return;
+  }
+  startError.textContent = message;
+  startError.classList.remove("hidden");
+}
+
+function setStartMode({ message, showJoinForm }) {
+  if (typeof message === "string") {
+    startStatus.textContent = message;
+  }
+  if (joinForm) {
+    joinForm.classList.toggle("hidden", !showJoinForm);
+  }
+}
+
+async function requestOrientationPermissionIfNeeded() {
+  if (typeof window.DeviceOrientationEvent === "undefined") return true;
+  if (typeof DeviceOrientationEvent.requestPermission !== "function") {
+    tiltAvailable = true;
+    tiltPermissionState = "granted";
+    return true;
+  }
+
+  try {
+    const result = await DeviceOrientationEvent.requestPermission();
+    tiltPermissionState = result;
+    tiltAvailable = result === "granted";
+    return tiltAvailable;
+  } catch (error) {
+    tiltPermissionState = "denied";
+    tiltAvailable = false;
+    return false;
+  }
+}
+
+async function enableKeepAwake() {
+  if (isCapacitorApp) {
+    const plugin = window.Capacitor?.Plugins?.KeepAwake;
+    if (plugin) {
+      try {
+        if (typeof plugin.keepAwake === "function") {
+          await plugin.keepAwake();
+          return;
+        }
+        if (typeof plugin.activate === "function") {
+          await plugin.activate();
+          return;
+        }
+      } catch (error) {
+        // fallback below
+      }
+    }
+  }
+
+  if (navigator.wakeLock?.request) {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request("screen");
+      wakeLockSentinel.addEventListener("release", () => {
+        wakeLockSentinel = null;
+      });
+    } catch (error) {
+      wakeLockSentinel = null;
+    }
+  }
+}
+
+async function releaseKeepAwake() {
+  if (wakeLockSentinel) {
+    try {
+      await wakeLockSentinel.release();
+    } catch (error) {
+      // ignore
+    }
+    wakeLockSentinel = null;
+  }
+
+  if (isCapacitorApp) {
+    const plugin = window.Capacitor?.Plugins?.KeepAwake;
+    if (plugin) {
+      try {
+        if (typeof plugin.allowSleepAgain === "function") {
+          await plugin.allowSleepAgain();
+        } else if (typeof plugin.deactivate === "function") {
+          await plugin.deactivate();
+        } else if (typeof plugin.release === "function") {
+          await plugin.release();
+        }
+      } catch (error) {
+        // ignore
+      }
+    }
+  }
+}
+
+function queueJoinRequest(roomId, player) {
+  const normalizedRoom = normalizeRoomCode(roomId);
+  const requestedPlayer = Number(player) === 2 ? 2 : 1;
+  if (!normalizedRoom) {
+    setStartError("Saisis un code de room valide.");
+    return false;
+  }
+
+  pendingJoinRequest = { roomId: normalizedRoom, player: requestedPlayer };
+  setStartMode({ message: `Connexion à la room ${normalizedRoom}...`, showJoinForm: false });
+
+  if (socket.connected) {
+    socket.emit("register-mobile", pendingJoinRequest);
+  }
+
+  return true;
+}
+
+async function handleJoinSubmit(event) {
+  event.preventDefault();
+  const roomId = roomInput ? roomInput.value : "";
+  const player = getSelectedJoinPlayer();
+
+  setStartError("");
+  const permissionOk = await requestOrientationPermissionIfNeeded();
+  const queued = queueJoinRequest(roomId, player);
+  if (queued && !permissionOk) {
+    setStartError("Gyroscope non autorisé. Tu peux quand même rejoindre avec le volant ou les boutons.");
+  }
 }
 
 // ============================================================
 // 1. Connexion à la room
 // ============================================================
 
-if (!roomId) {
-  startStatus.textContent =
-    "❌ Aucun code de room détecté. Rescanne le QR code depuis l'écran du jeu.";
+if (autoJoinRequest) {
+  roomIdDisplay.textContent = autoJoinRequest.roomId;
+  playerBadge.textContent = `J${autoJoinRequest.player}`;
+  playerBadge.classList.add(autoJoinRequest.player === 2 ? "player-2" : "player-1");
+  setStartMode({ message: `Connexion à la room ${autoJoinRequest.roomId}...`, showJoinForm: false });
 } else {
-  roomIdDisplay.textContent = roomId;
-  playerBadge.textContent = `J${requestedPlayer}`;
-  playerBadge.classList.add(requestedPlayer === 2 ? "player-2" : "player-1");
+  setStartMode({ message: "Saisis le code de room et choisis le joueur.", showJoinForm: true });
+  if (roomInput) {
+    roomInput.focus();
+  }
+}
 
-  socket.on("connect", () => {
-    startStatus.textContent = `Connexion à la room ${roomId}...`;
-    socket.emit("register-mobile", { roomId, player: requestedPlayer });
-  });
+if (joinForm) {
+  joinForm.addEventListener("submit", handleJoinSubmit);
+}
 
-  socket.on("joined-room", ({ success, message, player }) => {
-    if (success) {
-      if (player && player !== requestedPlayer) {
-        // L'autre slot était pris, le serveur nous a basculés automatiquement
-        playerBadge.textContent = `J${player}`;
-        playerBadge.classList.remove("player-1", "player-2");
-        playerBadge.classList.add(player === 2 ? "player-2" : "player-1");
-      }
-      startScreen.classList.add("hidden");
-      controllerScreen.classList.remove("hidden");
-      setStatus("connected", "🟢 CONNECTÉ");
-      startWheelSending();
-    } else {
-      startStatus.textContent = `❌ ${message || "Impossible de rejoindre la room."}`;
+if (roomInput) {
+  roomInput.addEventListener("input", () => {
+    const normalized = normalizeRoomCode(roomInput.value);
+    if (roomInput.value !== normalized) {
+      roomInput.value = normalized;
     }
   });
-
-  socket.on("pc-disconnected", () => {
-    setStatus("error", "🔴 JEU FERMÉ");
-    startStatus.textContent = "⚠️ L'écran du jeu a été fermé.";
-    startScreen.classList.remove("hidden");
-    controllerScreen.classList.add("hidden");
-  });
-
-  socket.on("disconnect", () => {
-    setStatus("error", "🔴 DÉCONNECTÉ");
-    startStatus.textContent = "🔌 Déconnecté du serveur.";
-    startScreen.classList.remove("hidden");
-    controllerScreen.classList.add("hidden");
-  });
 }
+
+socket.on("connect", () => {
+  console.log("[controller] socket connecté", socket.id, "->", SOCKET_URL);
+  if (pendingJoinRequest) {
+    socket.emit("register-mobile", pendingJoinRequest);
+    setStartMode({ message: `Connexion à la room ${pendingJoinRequest.roomId}...`, showJoinForm: false });
+  } else {
+    setStartMode({ message: isCapacitorApp ? "Saisis le code de room pour rejoindre la course." : "Connexion au serveur établie.", showJoinForm: true });
+  }
+});
+
+socket.on("joined-room", async ({ success, message, player }) => {
+  if (success) {
+    const activeRequest = pendingJoinRequest;
+    const activePlayer = player || activeRequest?.player || 1;
+    if (activeRequest?.roomId) {
+      roomIdDisplay.textContent = activeRequest.roomId;
+    }
+    playerBadge.textContent = `J${activePlayer}`;
+    playerBadge.classList.remove("player-1", "player-2");
+    playerBadge.classList.add(activePlayer === 2 ? "player-2" : "player-1");
+
+    startScreen.classList.add("hidden");
+    controllerScreen.classList.remove("hidden");
+    setStatus("connected", "🟢 CONNECTÉ");
+    await enableKeepAwake();
+    startWheelSending();
+  } else {
+    setStartError(`❌ ${message || "Impossible de rejoindre la room."}`);
+    setStartMode({ message: "Connexion impossible. Vérifie le code et réessaie.", showJoinForm: true });
+  }
+});
+
+socket.on("pc-disconnected", async () => {
+  await releaseKeepAwake();
+  setStatus("error", "🔴 JEU FERMÉ");
+  setStartMode({ message: "⚠️ L'écran du jeu a été fermé.", showJoinForm: !!autoJoinRequest ? false : true });
+  startScreen.classList.remove("hidden");
+  controllerScreen.classList.add("hidden");
+});
+
+socket.on("disconnect", async () => {
+  await releaseKeepAwake();
+  setStatus("error", "🔴 DÉCONNECTÉ");
+  setStartMode({ message: "🔌 Déconnecté du serveur.", showJoinForm: !autoJoinRequest });
+  startScreen.classList.remove("hidden");
+  controllerScreen.classList.add("hidden");
+});
+
+window.addEventListener("beforeunload", () => {
+  releaseKeepAwake();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && !controllerScreen.classList.contains("hidden")) {
+    enableKeepAwake();
+  }
+});
 
 function setStatus(kind, text) {
   statusLine.textContent = text;

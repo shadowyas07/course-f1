@@ -10,6 +10,9 @@
     "postinstall": "node scripts/copy-vendor.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
     "express": "^4.19.2",
     "qrcode": "^1.5.3",
     "socket.io": "^4.7.5",

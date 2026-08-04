@@ -19,8 +19,27 @@
 
   <!-- Écran de statut avant que la room soit rejointe -->
   <div id="start-screen" class="screen">
-    <p id="start-status">Connexion à la room...</p>
-    <p id="start-error" class="error hidden"></p>
+    <div class="start-card">
+      <p id="start-status">Connexion à la room...</p>
+
+      <form id="join-form" class="join-form hidden" autocomplete="off">
+        <label class="field">
+          <span>Code de room</span>
+          <input id="room-input" type="text" maxlength="6" inputmode="latin" placeholder="ABC123" />
+        </label>
+
+        <fieldset class="player-select">
+          <legend>Joueur</legend>
+          <label><input type="radio" name="join-player" value="1" checked /> <span>Joueur 1</span></label>
+          <label><input type="radio" name="join-player" value="2" /> <span>Joueur 2</span></label>
+        </fieldset>
+
+        <button id="join-btn" type="submit">Rejoindre</button>
+        <p class="join-hint">Utilise ce mode si tu ouvres l’app Android sans QR code.</p>
+      </form>
+
+      <p id="start-error" class="error hidden"></p>
+    </div>
   </div>
 
   <!-- Manette -->
