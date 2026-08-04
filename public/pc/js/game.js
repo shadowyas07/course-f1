@@ -797,7 +797,7 @@ const smokeLife = new Float32Array(smokeCount);
 let smokeNeedsUpload = false;
 for (let i = 0; i < smokeCount; i++) smokePositions[i * 3 + 1] = -100;
 smokeGeo.setAttribute("position", new THREE.BufferAttribute(smokePositions, 3));
-const smokeMat = new THREE.PointsMaterial({ color: 0xd8dde4, size: 0.3, transparent: true, opacity: 0.62, depthWrite: false });
+const smokeMat = new THREE.PointsMaterial({ color: 0xf5f7fa, size: 0.58, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false });
 scene.add(new THREE.Points(smokeGeo, smokeMat));
 
 const SPARK_COUNT = 140;
@@ -863,11 +863,11 @@ function spawnSmoke(x, z, count) {
   for (let n = 0; n < spawnCount; n++) {
     const i = smokeCursor;
     smokeCursor = (smokeCursor + 1) % smokeCount;
-    smokePositions[i * 3] = x + (Math.random() - 0.5) * 0.7;
-    smokePositions[i * 3 + 1] = 0.15;
-    smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.7;
-    smokeVelocities[i].set((Math.random() - 0.5) * 0.7, 0.8 + Math.random() * 0.8, (Math.random() - 0.5) * 0.7);
-    smokeLife[i] = 0.55 + Math.random() * 0.55;
+    smokePositions[i * 3] = x + (Math.random() - 0.5) * 1.0;
+    smokePositions[i * 3 + 1] = 0.24;
+    smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 1.0;
+    smokeVelocities[i].set((Math.random() - 0.5) * 1.0, 1.1 + Math.random() * 1.25, (Math.random() - 0.5) * 1.0);
+    smokeLife[i] = 0.85 + Math.random() * 0.75;
   }
   smokeNeedsUpload = true;
 }
@@ -953,9 +953,9 @@ function updateSmoke(dt) {
     smokePositions[i * 3] += smokeVelocities[i].x * dt;
     smokePositions[i * 3 + 1] += smokeVelocities[i].y * dt;
     smokePositions[i * 3 + 2] += smokeVelocities[i].z * dt;
-    smokeVelocities[i].y += 0.22 * dt;
-    smokeVelocities[i].x *= 0.985;
-    smokeVelocities[i].z *= 0.985;
+    smokeVelocities[i].y += 0.35 * dt;
+    smokeVelocities[i].x *= 0.992;
+    smokeVelocities[i].z *= 0.992;
     dirty = true;
   }
   if (dirty || smokeNeedsUpload) {
@@ -1247,7 +1247,7 @@ function updateCarPhysics(state, dt, wallMode) {
   }
 
   if (canDrift && Math.abs(physics.driftYaw) > 0.18) {
-    spawnSmoke(physics.x, physics.z, 1 + Math.floor(speedAbs / 12));
+    spawnSmoke(physics.x, physics.z, 3 + Math.floor(speedAbs / 8));
   }
 
   const forwardDir = new THREE.Vector3(Math.sin(physics.heading), 0, Math.cos(physics.heading));
@@ -1361,8 +1361,8 @@ const audioState = {
   masterGain: null,
   unlocked: false,
   carSounds: {
-    1: { osc: null, gain: null },
-    2: { osc: null, gain: null },
+    1: { osc: null, gain: null, driftOsc: null, driftGain: null },
+    2: { osc: null, gain: null, driftOsc: null, driftGain: null },
   },
 };
 
@@ -1410,17 +1410,25 @@ function initCarEngineAudio(playerId) {
   engineGain.gain.value = 0;
   const noiseGain = ctx.createGain();
   noiseGain.gain.value = 0;
+  const driftOsc = ctx.createOscillator();
+  driftOsc.type = "triangle";
+  driftOsc.frequency.value = 760;
+  const driftGain = ctx.createGain();
+  driftGain.gain.value = 0;
 
   tone.connect(filter);
   rumble.connect(filter);
   filter.connect(engineGain);
   noise.connect(noiseGain);
+  driftOsc.connect(driftGain);
   engineGain.connect(audioState.masterGain);
   noiseGain.connect(audioState.masterGain);
+  driftGain.connect(audioState.masterGain);
 
   tone.start();
   rumble.start();
   noise.start();
+  driftOsc.start();
 
   slot.osc = tone;
   slot.rumble = rumble;
@@ -1428,6 +1436,8 @@ function initCarEngineAudio(playerId) {
   slot.filter = filter;
   slot.gain = engineGain;
   slot.noiseGain = noiseGain;
+  slot.driftOsc = driftOsc;
+  slot.driftGain = driftGain;
 }
 
 function unlockAudio() {
@@ -1481,25 +1491,31 @@ function playVictoryAudio(playerId) {
 function updateCarEngineAudio(state, dt) {
   if (!audioState.unlocked) return;
   const slot = audioState.carSounds[state.playerId];
-  if (!slot || !slot.osc || !slot.gain || !slot.rumble || !slot.noiseGain || !slot.filter || !audioState.ctx) return;
+  if (!slot || !slot.osc || !slot.gain || !slot.rumble || !slot.noiseGain || !slot.filter || !slot.driftOsc || !slot.driftGain || !audioState.ctx) return;
 
   const speedRatio = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
   const controls = getControls(state.playerId);
   const throttleBoost = controls.gasPressed ? 0.18 : 0;
   const slipFactor = Math.min(1, Math.abs(state.physics.driftYaw) * 0.9 + (controls.handbrakePressed ? 0.3 : 0));
+  const driftFactor = controls.handbrakePressed && speedRatio > 0.25 ? Math.min(1, slipFactor * 1.25) : 0;
   const targetFreq = 70 + speedRatio * 210 + throttleBoost * 130 + slipFactor * 45;
   const targetGain = raceLocked ? 0.0001 : 0.02 + speedRatio * 0.1 + throttleBoost * 0.06;
   const targetNoiseGain = raceLocked ? 0.0001 : 0.008 + speedRatio * 0.02 + slipFactor * 0.02;
+  const targetDriftGain = raceLocked ? 0.0001 : driftFactor * (0.03 + speedRatio * 0.05);
   const smooth = Math.min(1, dt * 8);
   const rumbleFreq = 34 + speedRatio * 28;
+  const driftFreq = 620 + speedRatio * 320 + slipFactor * 140;
 
   const currentFreq = slot.osc.frequency.value;
   const currentGain = slot.gain.gain.value;
   const currentNoiseGain = slot.noiseGain.gain.value;
+  const currentDriftGain = slot.driftGain.gain.value;
   slot.osc.frequency.setValueAtTime(currentFreq + (targetFreq - currentFreq) * smooth, audioState.ctx.currentTime);
   slot.rumble.frequency.setValueAtTime(rumbleFreq, audioState.ctx.currentTime);
+  slot.driftOsc.frequency.setValueAtTime(driftFreq, audioState.ctx.currentTime);
   slot.gain.gain.setValueAtTime(currentGain + (targetGain - currentGain) * smooth, audioState.ctx.currentTime);
   slot.noiseGain.gain.setValueAtTime(currentNoiseGain + (targetNoiseGain - currentNoiseGain) * smooth, audioState.ctx.currentTime);
+  slot.driftGain.gain.setValueAtTime(currentDriftGain + (targetDriftGain - currentDriftGain) * smooth, audioState.ctx.currentTime);
   slot.filter.frequency.setValueAtTime(180 + speedRatio * 320 + slipFactor * 100, audioState.ctx.currentTime);
 }
 
@@ -1559,13 +1575,22 @@ function syncBestTime(state) {
 
 const cameraRig = { distance: 8, height: 3.6, lookAtHeight: 1.0, smoothing: 5.2 };
 const _desiredCamPos = new THREE.Vector3();
+let cameraShakePhase = 0;
 
 function updateCarCamera(state, dt) {
   const physics = state.physics;
+  cameraShakePhase += dt * 34;
+  const speedRatio = Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed);
+  const shakeBlend = Math.max(0, (speedRatio - 0.92) / 0.08);
+  const shakeAmp = 0.085 * shakeBlend;
+  const shakeX = Math.sin(cameraShakePhase * 2.3 + state.playerId) * shakeAmp;
+  const shakeY = Math.cos(cameraShakePhase * 3.1 + state.playerId * 0.7) * shakeAmp * 0.6;
+  const shakeZ = Math.sin(cameraShakePhase * 1.9 + state.playerId * 0.33) * shakeAmp * 0.45;
+
   _desiredCamPos.set(
-    physics.x - Math.sin(physics.heading) * cameraRig.distance,
-    cameraRig.height,
-    physics.z - Math.cos(physics.heading) * cameraRig.distance
+    physics.x - Math.sin(physics.heading) * cameraRig.distance + shakeX,
+    cameraRig.height + shakeY,
+    physics.z - Math.cos(physics.heading) * cameraRig.distance + shakeZ
   );
   const lerpFactor = 1 - Math.exp(-cameraRig.smoothing * dt);
   state.currentCamPos.lerp(_desiredCamPos, lerpFactor);
@@ -1573,7 +1598,6 @@ function updateCarCamera(state, dt) {
   state.camera.position.copy(state.currentCamPos);
   state.camera.lookAt(physics.x, cameraRig.lookAtHeight, physics.z);
 
-  const speedRatio = Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed);
   const targetFov = BASE_FOV + speedRatio * 12;
   const newFov = state.camera.fov + (targetFov - state.camera.fov) * Math.min(1, dt * 3);
   if (Math.abs(newFov - state.camera.fov) > 0.02) {
