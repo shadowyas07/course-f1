@@ -170,15 +170,14 @@ function buildTrackMeshes() {
 function buildTrackCenterLine() {
   const points = centerPoints.map((p) => new THREE.Vector3(p.x, 0.045, p.z));
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  geometry.computeLineDistances();
-  const material = new THREE.LineDashedMaterial({
-    color: 0xffe08a,
-    dashSize: 1.8,
-    gapSize: 1.4,
-    linewidth: 2,
+  const material = new THREE.LineBasicMaterial({
+    color: 0xffdd99,
+    transparent: true,
+    opacity: 0.72,
   });
   const line = new THREE.LineLoop(geometry, material);
-  line.computeLineDistances();
+  line.renderOrder = 2;
+  line.frustumCulled = false;
   return line;
 }
 
@@ -512,8 +511,8 @@ renderer.setScissorTest(true);
 renderer.sortObjects = true;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x132b45);
-scene.fog = new THREE.Fog(0xb86135, 90, 320);
+scene.background = new THREE.Color(0x243753);
+scene.fog = new THREE.Fog(0xb96f3d, 70, 260);
 
 function buildSkyDome() {
   const skyGeo = new THREE.SphereGeometry(900, 24, 16);
