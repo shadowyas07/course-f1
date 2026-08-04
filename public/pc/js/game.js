@@ -16,6 +16,7 @@
  */
 
 import * as THREE from "./vendor/three.module.min.js";
+import { buildSpaTrack } from "./track-spa.js";
 
 // ============================================================
 // Textures procedurales (aucun asset externe requis)
@@ -110,84 +111,8 @@ const TRACK = {
   perimeter: 0,
 };
 const WALL_BOUNDARY = TRACK.roadHalfWidth + TRACK.curbWidth;
-
-const SPA_CONTROL_POINTS = [
-  { x: -84, z: 29 },
-  { x: -75, z: 19 },
-  { x: -64, z: 7 },
-  { x: -50, z: -7 },
-  { x: -36, z: -11 },
-  { x: -23, z: -22 },
-  { x: 5, z: -31 },
-  { x: 18, z: -27 },
-  { x: 31, z: -25 },
-  { x: 45, z: -8 },
-  { x: 39, z: 6 },
-  { x: 24, z: 12 },
-  { x: 8, z: 16 },
-  { x: 8, z: 32 },
-  { x: 21, z: 47 },
-  { x: 36, z: 54 },
-  { x: 30, z: 70 },
-  { x: 6, z: 74 },
-  { x: -16, z: 64 },
-  { x: -26, z: 49 },
-  { x: -44, z: 37 },
-  { x: -58, z: 36 },
-  { x: -72, z: 40 },
-];
-
-const TRACK_SAMPLES = 420;
-
-function smoothClosedPath(points, iterations = 2) {
-  let out = points.slice();
-  for (let it = 0; it < iterations; it++) {
-    const next = [];
-    for (let i = 0; i < out.length; i++) {
-      const a = out[i];
-      const b = out[(i + 1) % out.length];
-      next.push({ x: 0.75 * a.x + 0.25 * b.x, z: 0.75 * a.z + 0.25 * b.z });
-      next.push({ x: 0.25 * a.x + 0.75 * b.x, z: 0.25 * a.z + 0.75 * b.z });
-    }
-    out = next;
-  }
-  return out;
-}
-
-function sampleClosedPolyline(points, samples) {
-  const cumulative = [0];
-  let total = 0;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    total += Math.hypot(b.x - a.x, b.z - a.z);
-    cumulative.push(total);
-  }
-
-  const sampled = [];
-  for (let i = 0; i < samples; i++) {
-    const target = (i / samples) * total;
-    let seg = 0;
-    while (seg < points.length - 1 && cumulative[seg + 1] < target) seg += 1;
-    const a = points[seg];
-    const b = points[(seg + 1) % points.length];
-    const start = cumulative[seg];
-    const segLen = Math.max(0.0001, cumulative[seg + 1] - start);
-    const t = (target - start) / segLen;
-    sampled.push({
-      x: a.x + (b.x - a.x) * t,
-      z: a.z + (b.z - a.z) * t,
-    });
-  }
-  return sampled;
-}
-
-function buildSpaCenterPoints(samples) {
-  const smoothed = smoothClosedPath(SPA_CONTROL_POINTS, 2);
-  return sampleClosedPolyline(smoothed, samples);
-}
-
-const centerPoints = buildSpaCenterPoints(TRACK_SAMPLES);
+const TRACK_SAMPLES = 800;
+const centerPoints = [];
 
 function buildTrackArcLengths(points) {
   const lengths = [0];
@@ -201,8 +126,7 @@ function buildTrackArcLengths(points) {
   return { lengths, total };
 }
 
-const trackArc = buildTrackArcLengths(centerPoints);
-TRACK.perimeter = trackArc.total;
+let trackArc = { lengths: [0], total: 1 };
 
 function trackPointAt(distance) {
   const perimeter = TRACK.perimeter;
@@ -263,8 +187,16 @@ function computeTrackBounds(points) {
   };
 }
 
-const TRACK_BOUNDS = computeTrackBounds(centerPoints);
-const START_DISTANCE = TRACK.perimeter * 0.012;
+let TRACK_BOUNDS = {
+  minX: -40,
+  maxX: 40,
+  minZ: -40,
+  maxZ: 40,
+  centerX: 0,
+  centerZ: 0,
+  halfExtent: 40,
+};
+let START_DISTANCE = 0;
 
 function buildStartGrid() {
   const laneOffset = 2.6;
@@ -277,7 +209,34 @@ function buildStartGrid() {
   };
 }
 
-const START_GRID = buildStartGrid();
+let START_GRID = {
+  car1: { x: -2.6, z: 0, heading: 0 },
+  car2: { x: 2.6, z: -4, heading: 0 },
+};
+
+function initializeSpaTrack(sceneRef) {
+  const spaTrack = buildSpaTrack(sceneRef, THREE, {
+    roadWidth: TRACK.roadHalfWidth * 2,
+    addGround: false,
+  });
+
+  centerPoints.length = 0;
+  for (const p of spaTrack.samples) {
+    centerPoints.push({ x: p.x, z: p.z });
+  }
+
+  trackArc = buildTrackArcLengths(centerPoints);
+  TRACK.perimeter = trackArc.total;
+  TRACK_BOUNDS = computeTrackBounds(centerPoints);
+  START_DISTANCE = TRACK.perimeter * 0.012;
+
+  START_GRID = {
+    car1: { x: spaTrack.startPositions[0].x, z: spaTrack.startPositions[0].z, heading: spaTrack.startRotation },
+    car2: { x: spaTrack.startPositions[1].x, z: spaTrack.startPositions[1].z, heading: spaTrack.startRotation },
+  };
+
+  return spaTrack;
+}
 
 const PERF = {
   hudInterval: 1 / 12,
@@ -840,8 +799,7 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
-
-scene.add(buildTrackMeshes());
+initializeSpaTrack(scene);
 scene.add(buildScenery());
 
 const skidMarksGroup = new THREE.Group();
