@@ -208,7 +208,7 @@ if (autoJoinRequest) {
   playerBadge.classList.add(autoJoinRequest.player === 2 ? "player-2" : "player-1");
   setStartMode({ message: `Connexion à la room ${autoJoinRequest.roomId}...`, showJoinForm: false });
 } else {
-  setStartMode({ message: "Saisis le code de room et choisis le joueur.", showJoinForm: true });
+  setStartMode({ message: "Mode manette: entre le code room affiché sur le PC, puis choisis ton joueur.", showJoinForm: true });
   if (roomInput) {
     roomInput.focus();
   }

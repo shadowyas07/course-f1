@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
+  const launchScreen = document.getElementById('launch-screen');
+  const launchPcBtn = document.getElementById('launch-pc-btn');
+  const launchControllerBtn = document.getElementById('launch-controller-btn');
   const modeCards = Array.from(document.querySelectorAll('.mode-card'));
   const modeBannerTitle = document.getElementById('mode-banner-title');
   const modeBannerDesc = document.getElementById('mode-banner-desc');
@@ -39,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   let selectedMode = 'duel';
+  let pcFlowStarted = false;
 
   function formatTime(seconds) {
     if (seconds == null) return '--:--.---';
@@ -121,6 +125,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 220);
   }
 
+  function startPcFlow() {
+    if (pcFlowStarted) return;
+    pcFlowStarted = true;
+    window.appRole = 'pc';
+    if (launchScreen) launchScreen.classList.add('hidden');
+    if (bootScreen) bootScreen.classList.remove('hidden');
+    if (typeof window.startPcSession === 'function') {
+      window.startPcSession();
+    }
+    window.setTimeout(revealLobby, 1400);
+  }
+
+  function startControllerFlow() {
+    window.appRole = 'controller';
+    window.location.href = '/mobile';
+  }
+
   modeCards.forEach((card) => {
     card.addEventListener('click', () => applyMode(card.dataset.mode));
   });
@@ -129,7 +150,20 @@ document.addEventListener('DOMContentLoaded', () => {
     enterBtn.addEventListener('click', revealLobby);
   }
 
+  if (launchPcBtn) {
+    launchPcBtn.addEventListener('click', startPcFlow);
+  }
+
+  if (launchControllerBtn) {
+    launchControllerBtn.addEventListener('click', startControllerFlow);
+  }
+
   document.addEventListener('keydown', (event) => {
+    if (launchScreen && !launchScreen.classList.contains('hidden') && event.key === 'Enter') {
+      event.preventDefault();
+      startPcFlow();
+      return;
+    }
     if ((event.key === 'Enter' || event.key === ' ') && bootScreen && !bootScreen.classList.contains('hidden')) {
       event.preventDefault();
       revealLobby();
@@ -142,6 +176,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
   applyMode('duel');
   updateBestTimeDisplay();
-
-  window.setTimeout(revealLobby, 1400);
 });

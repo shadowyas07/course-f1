@@ -75,6 +75,65 @@ body {
   display: none !important;
 }
 
+.launch-screen {
+  background:
+    radial-gradient(circle at 14% 12%, rgba(52, 195, 255, 0.16), transparent 34%),
+    radial-gradient(circle at 84% 90%, rgba(255, 59, 59, 0.14), transparent 38%),
+    linear-gradient(135deg, rgba(7, 8, 11, 0.98), rgba(16, 18, 25, 0.98));
+}
+
+.launch-card {
+  width: min(720px, 100%);
+  padding: 42px 36px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(18px);
+}
+
+.launch-actions {
+  margin: 26px 0 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.launch-btn {
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-family: var(--font-utility);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.launch-btn:hover {
+  transform: translateY(-2px);
+}
+
+.launch-btn-pc {
+  background: linear-gradient(90deg, var(--pit-yellow), #ff7a00);
+  color: #241a02;
+  box-shadow: 0 10px 24px rgba(255, 201, 60, 0.24);
+}
+
+.launch-btn-controller {
+  background: linear-gradient(90deg, #4fd1c5, #2a9d8f);
+  color: #041310;
+  box-shadow: 0 10px 24px rgba(79, 209, 197, 0.22);
+}
+
+@media (max-width: 720px) {
+  .launch-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
 .boot-screen {
   background:
     radial-gradient(circle at top left, rgba(255, 201, 60, 0.18), transparent 32%),

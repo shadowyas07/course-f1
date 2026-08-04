@@ -11,7 +11,22 @@
 </head>
 <body>
 
-  <div id="boot-screen" class="screen boot-screen">
+  <div id="launch-screen" class="screen launch-screen">
+    <div class="launch-card">
+      <p class="eyebrow">Point de départ</p>
+      <h1>Choisis ton interface</h1>
+      <p class="subtitle">PC pour afficher les QR codes et lancer la course. Manette pour rejoindre directement avec un code room, sans scanner.</p>
+
+      <div class="launch-actions">
+        <button id="launch-pc-btn" class="launch-btn launch-btn-pc">💻 Ouvrir interface PC</button>
+        <button id="launch-controller-btn" class="launch-btn launch-btn-controller">🎮 Ouvrir interface Manette</button>
+      </div>
+
+      <p class="boot-hint">En mode manette, saisis le code room affiché sur l'écran PC.</p>
+    </div>
+  </div>
+
+  <div id="boot-screen" class="screen boot-screen hidden">
     <div class="boot-card">
       <p class="eyebrow">Lancement de la salle</p>
       <h1>Prépare la piste</h1>

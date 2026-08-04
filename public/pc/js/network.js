@@ -31,6 +31,7 @@ const status1 = document.getElementById("status-1");
 const status2 = document.getElementById("status-2");
 const startBtn = document.getElementById("start-race-btn");
 const serverStatusEl = document.getElementById("server-status");
+let pcRegistered = false;
 
 function setServerStatus(message, kind = "info") {
   if (!serverStatusEl) return;
@@ -53,10 +54,27 @@ function refreshStartButton() {
 }
 window.refreshStartButton = refreshStartButton;
 
+function registerPcIfNeeded() {
+  if (pcRegistered || !socket.connected) return;
+  socket.emit("register-pc");
+  pcRegistered = true;
+  setServerStatus("🟢 Connecté au serveur — création de la room...", "connected");
+}
+
+window.startPcSession = function startPcSession() {
+  registerPcIfNeeded();
+  refreshStartButton();
+};
+
 socket.on("connect", () => {
   console.log("[network] Connecté au serveur, id =", socket.id);
-  setServerStatus("🟢 Connecté au serveur", "connected");
-  socket.emit("register-pc");
+  pcRegistered = false;
+  const isPcFlow = window.appRole === "pc";
+  if (isPcFlow) {
+    registerPcIfNeeded();
+  } else {
+    setServerStatus("Choisis PC ou Manette pour démarrer", "info");
+  }
 });
 
 socket.on("connect_error", () => {
@@ -64,6 +82,7 @@ socket.on("connect_error", () => {
 });
 
 socket.on("disconnect", () => {
+  pcRegistered = false;
   setServerStatus("🔴 Déconnecté du serveur", "error");
 });
 
