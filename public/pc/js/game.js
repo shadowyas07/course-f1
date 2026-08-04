@@ -701,15 +701,17 @@ const PHYSICS_PARAMS = {
   grassMaxSpeedFactor: 0.45,
   grassFriction: 26,
   wallImpactFactor: 0.35, // vitesse conservée après un choc contre le mur
-  handbrakeDeceleration: 16,
-  handbrakeSteerBoost: 2.1,
-  handbrakeMinSpeed: 7,
-  handbrakeSlipBoost: 1.45,
-  driftBuildRate: 4.4,
-  driftRecoverRate: 2.2,
-  driftSustainRecoverRate: 0.95,
-  driftMinSteer: 0.12,
-  driftMaxAngle: 0.7,
+  handbrakeDeceleration: 7.5,
+  handbrakeSteerBoost: 2.35,
+  handbrakeMinSpeed: 4.2,
+  handbrakeSlipBoost: 1.9,
+  driftBuildRate: 6.2,
+  driftRecoverRate: 1.25,
+  driftSustainRecoverRate: 0.42,
+  driftMinSteer: 0.06,
+  driftMaxAngle: 1.15,
+  driftHeadingFactor: 0.56,
+  driftCounterSteerAssist: 0.22,
 };
 
 /**
@@ -901,10 +903,13 @@ function updateCarPhysics(state, dt, wallMode) {
     steerRate *= PHYSICS_PARAMS.handbrakeSteerBoost;
   }
   const steerInput = Math.max(-1, Math.min(1, controls.steerAngle || 0));
+  const speedAbs = Math.abs(physics.speed);
+  const steerAbs = Math.abs(steerInput);
 
   if (Math.abs(physics.speed) > 0.3) {
     const direction = physics.speed >= 0 ? 1 : -1;
-    physics.heading -= steerInput * steerRate * dt * direction;
+    const headingFactor = handbrakeActive ? PHYSICS_PARAMS.driftHeadingFactor : 1;
+    physics.heading -= steerInput * steerRate * dt * direction * headingFactor;
   }
 
   if (handbrakeActive) {
@@ -913,8 +918,6 @@ function updateCarPhysics(state, dt, wallMode) {
     else if (physics.speed < 0) physics.speed = Math.min(0, physics.speed + hb);
   }
 
-  const speedAbs = Math.abs(physics.speed);
-  const steerAbs = Math.abs(steerInput);
   const canDrift = handbrakeActive
     && speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed
     && steerAbs > PHYSICS_PARAMS.driftMinSteer;
@@ -924,7 +927,9 @@ function updateCarPhysics(state, dt, wallMode) {
       * PHYSICS_PARAMS.driftMaxAngle
       * (0.55 + driftSpeedRatio * 0.95)
       * PHYSICS_PARAMS.handbrakeSlipBoost;
-    physics.driftYaw += (driftTarget - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
+    const counterSteer = Math.sign(steerInput) === -Math.sign(physics.driftYaw) ? steerInput * PHYSICS_PARAMS.driftCounterSteerAssist : 0;
+    const driftTargetWithCounter = driftTarget + counterSteer;
+    physics.driftYaw += (driftTargetWithCounter - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
   } else {
     const sustainDrift = speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed * 0.75 && steerAbs > 0.22;
     const recoverRate = sustainDrift
