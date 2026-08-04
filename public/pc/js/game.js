@@ -701,12 +701,15 @@ const PHYSICS_PARAMS = {
   grassMaxSpeedFactor: 0.45,
   grassFriction: 26,
   wallImpactFactor: 0.35, // vitesse conservée après un choc contre le mur
-  handbrakeDeceleration: 30,
-  handbrakeSteerBoost: 1.65,
+  handbrakeDeceleration: 16,
+  handbrakeSteerBoost: 2.1,
   handbrakeMinSpeed: 7,
-  driftBuildRate: 1.9,
-  driftRecoverRate: 4.2,
-  driftMaxAngle: 0.44,
+  handbrakeSlipBoost: 1.45,
+  driftBuildRate: 4.4,
+  driftRecoverRate: 2.2,
+  driftSustainRecoverRate: 0.95,
+  driftMinSteer: 0.12,
+  driftMaxAngle: 0.7,
 };
 
 /**
@@ -900,12 +903,24 @@ function updateCarPhysics(state, dt, wallMode) {
     else if (physics.speed < 0) physics.speed = Math.min(0, physics.speed + hb);
   }
 
-  const canDrift = handbrakeActive && Math.abs(physics.speed) > PHYSICS_PARAMS.handbrakeMinSpeed;
+  const speedAbs = Math.abs(physics.speed);
+  const steerAbs = Math.abs(steerInput);
+  const canDrift = handbrakeActive
+    && speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed
+    && steerAbs > PHYSICS_PARAMS.driftMinSteer;
   if (canDrift) {
-    const driftTarget = steerInput * PHYSICS_PARAMS.driftMaxAngle * speedRatio;
+    const driftSpeedRatio = Math.min(1, speedAbs / (PHYSICS_PARAMS.maxSpeed * 0.9));
+    const driftTarget = steerInput
+      * PHYSICS_PARAMS.driftMaxAngle
+      * (0.55 + driftSpeedRatio * 0.95)
+      * PHYSICS_PARAMS.handbrakeSlipBoost;
     physics.driftYaw += (driftTarget - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
   } else {
-    physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftRecoverRate);
+    const sustainDrift = speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed * 0.75 && steerAbs > 0.22;
+    const recoverRate = sustainDrift
+      ? PHYSICS_PARAMS.driftSustainRecoverRate
+      : PHYSICS_PARAMS.driftRecoverRate;
+    physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * recoverRate);
   }
 
   const motionHeading = physics.heading + physics.driftYaw;
