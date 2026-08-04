@@ -9,6 +9,8 @@ export function buildSpaTrack(scene, THREE, options = {}) {
     addGround = true,
     roadColor = 0x2b2b2f,
     groundColor = 0x1c3320,
+    elevationScale = 0,
+    baseHeight = 0.04,
   } = options;
 
   // ---------- 1. Trace ----------
@@ -30,7 +32,7 @@ export function buildSpaTrack(scene, THREE, options = {}) {
     { n: "Approche ligne droite", x: 20, z: -30, y: 4.2 },
   ];
 
-  const curvePoints = pts.map((p) => new THREE.Vector3(p.x, p.y, p.z));
+  const curvePoints = pts.map((p) => new THREE.Vector3(p.x, baseHeight + p.y * elevationScale, p.z));
   const curve = new THREE.CatmullRomCurve3(curvePoints, true, "catmullrom", 0.4);
 
   const SAMPLES = 800;
