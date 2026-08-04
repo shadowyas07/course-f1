@@ -168,7 +168,7 @@ function controlsFor(player) {
 socket.on("steer", ({ player, payload }) => {
   const [direction, acceleration, brake, drift] = Array.isArray(payload) ? payload : [0, 0, 0, 0];
   const steerValue = Math.max(-1, Math.min(1, Number(direction) || 0));
-  controlsFor(player).steerAngle = steerValue;
+  controlsFor(player).steerAngle = -steerValue;
   controlsFor(player).gasPressed = !!acceleration;
   controlsFor(player).brakePressed = !!brake;
   controlsFor(player).handbrakePressed = !!drift;

@@ -477,7 +477,7 @@ function sendCompactInput() {
   }
 
   const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource));
-  const direction = Number((clamped / STEER_EFFECTIVE_RANGE).toFixed(3));
+  const direction = Number((-clamped / STEER_EFFECTIVE_RANGE).toFixed(3));
   const payload = [direction, activeGas ? 1 : 0, activeBrake ? 1 : 0, activeHandbrake ? 1 : 0];
   if (Math.abs(direction - lastSentSteer) < 0.001 && payload[1] === 0 && payload[2] === 0 && payload[3] === 0) return;
   lastSentSteer = direction;

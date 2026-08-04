@@ -498,8 +498,8 @@ function buildCar(bodyColor) {
 // ============================================================
 
 const canvas = document.getElementById("game-canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 if ("physicallyCorrectLights" in renderer) renderer.physicallyCorrectLights = true;
@@ -620,8 +620,7 @@ function currentQuality() {
 }
 
 function targetPixelRatio() {
-  const q = currentQuality();
-  return Math.min(window.devicePixelRatio, isSoloMode() ? q.soloPixelRatio : q.duelPixelRatio);
+  return Math.min(window.devicePixelRatio || 1, 2);
 }
 
 function onResize() {
@@ -970,7 +969,7 @@ function createCarState(playerId, bodyColor, startX, startZ) {
   return {
     playerId,
     parts,
-    physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0 },
+    physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0, velocity: new THREE.Vector3() },
     skidState: { lastPoint: null, active: false, cooldown: 0 },
     race: {
       lap: 1,
@@ -1049,6 +1048,14 @@ function getControls(playerId) {
   return window.carControls1 || fallback;
 }
 
+const DRIFT_CONFIG = {
+  normalTurnSpeed: 0.03,
+  driftTurnSpeed: 0.075,
+  normalGrip: 0.25,
+  driftGrip: 0.025,
+  driftSlideForce: 0.35,
+};
+
 function updateCarPhysics(state, dt, wallMode) {
   const controls = getControls(state.playerId);
   const physics = state.physics;
@@ -1119,9 +1126,17 @@ function updateCarPhysics(state, dt, wallMode) {
     physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * recoverRate);
   }
 
-  const motionHeading = physics.heading + physics.driftYaw;
-  physics.x += Math.sin(motionHeading) * physics.speed * dt;
-  physics.z += Math.cos(motionHeading) * physics.speed * dt;
+  const forwardDir = new THREE.Vector3(Math.sin(physics.heading), 0, Math.cos(physics.heading));
+  const sideDir = new THREE.Vector3(Math.cos(physics.heading), 0, -Math.sin(physics.heading));
+  const targetVelocity = forwardDir.clone().multiplyScalar(physics.speed);
+  const grip = canDrift ? DRIFT_CONFIG.driftGrip : DRIFT_CONFIG.normalGrip;
+  physics.velocity.lerp(targetVelocity, grip);
+  if (canDrift) {
+    const slideIntensity = -steerInput * Math.abs(physics.speed) * DRIFT_CONFIG.driftSlideForce * 0.05;
+    physics.velocity.addScaledVector(sideDir, slideIntensity);
+  }
+  physics.x += physics.velocity.x * dt;
+  physics.z += physics.velocity.z * dt;
 
   // --- Limites de terrain ---
   if (wallMode) {
@@ -1511,6 +1526,7 @@ function resetCarState(state, startX, startZ) {
   state.physics.heading = 0;
   state.physics.speed = 0;
   state.physics.driftYaw = 0;
+  state.physics.velocity.set(0, 0, 0);
   state.race.lap = 1;
   state.race.lapStartTime = 0;
   state.race.lastLapTime = null;

@@ -908,6 +908,7 @@ h1 {
   height: 100vh;
   display: block;
   background: var(--asphalt-0);
+  image-rendering: auto;
 }
 
 #game-screen {
