@@ -221,7 +221,7 @@ function initializeSpaTrack(sceneRef) {
   });
 
   centerPoints.length = 0;
-  for (const p of spaTrack.samples) {
+  for (const p of spaTrack.centerPoints) {
     centerPoints.push({ x: p.x, z: p.z });
   }
 
