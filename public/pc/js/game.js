@@ -53,18 +53,19 @@ function createSurfaceTextures() {
     512,
     (ctx, size) => {
       const grad = ctx.createLinearGradient(0, 0, size, size);
-      grad.addColorStop(0, "#2f6f2e");
-      grad.addColorStop(1, "#3d8839");
+      grad.addColorStop(0, "#1f7131");
+      grad.addColorStop(0.6, "#4ea93b");
+      grad.addColorStop(1, "#7ddc52");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, size, size);
       for (let i = 0; i < 3000; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
-        const a = 0.06 + Math.random() * 0.12;
-        ctx.fillStyle = `rgba(${40 + Math.random() * 30}, ${90 + Math.random() * 50}, ${35 + Math.random() * 25}, ${a})`;
+        const a = 0.08 + Math.random() * 0.14;
+        ctx.fillStyle = `rgba(${42 + Math.random() * 28}, ${118 + Math.random() * 42}, ${36 + Math.random() * 28}, ${a})`;
         ctx.fillRect(x, y, 2 + Math.random() * 2, 2 + Math.random() * 2);
       }
-      makeNoise(ctx, size, 20);
+      makeNoise(ctx, size, 24);
     },
     24,
     24
@@ -73,20 +74,20 @@ function createSurfaceTextures() {
   const asphaltTexture = makeRepeatingCanvasTexture(
     512,
     (ctx, size) => {
-      ctx.fillStyle = "#2a2a30";
+      ctx.fillStyle = "#171923";
       ctx.fillRect(0, 0, size, size);
       for (let i = 0; i < 5200; i++) {
         const x = Math.random() * size;
         const y = Math.random() * size;
-        const v = 48 + Math.random() * 40;
-        const a = 0.08 + Math.random() * 0.2;
-        ctx.fillStyle = `rgba(${v}, ${v}, ${v + 4}, ${a})`;
+        const v = 58 + Math.random() * 36;
+        const a = 0.09 + Math.random() * 0.18;
+        ctx.fillStyle = `rgba(${v}, ${v}, ${v + 6}, ${a})`;
         const r = Math.random() * 1.7 + 0.4;
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
       }
-      makeNoise(ctx, size, 26);
+      makeNoise(ctx, size, 30);
     },
     18,
     18
@@ -247,8 +248,8 @@ function meshFromRibbon({ positions, colors, uvs, indices }, options = {}) {
 
 function buildTree() {
   const tree = new THREE.Group();
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 1 });
-  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2d6a2d, roughness: 0.9 });
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6c3f22, roughness: 1 });
+  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x4bae4d, roughness: 0.85 });
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, 1.6, 6), trunkMat);
   trunk.position.y = 0.8;
   trunk.castShadow = false;
@@ -445,8 +446,8 @@ renderer.setScissorTest(true);
 renderer.sortObjects = true;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x86c5e8);
-scene.fog = new THREE.Fog(0x8ec6e2, 130, 380);
+scene.background = new THREE.Color(0x224a6b);
+scene.fog = new THREE.Fog(0xf09a61, 90, 320);
 
 function buildSkyDome() {
   const skyGeo = new THREE.SphereGeometry(900, 24, 16);
@@ -454,11 +455,11 @@ function buildSkyDome() {
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      topColor: { value: new THREE.Color(0x87bfe8) },
-      horizonColor: { value: new THREE.Color(0xd9f0ff) },
-      groundColor: { value: new THREE.Color(0xcbe6ff) },
-      sunColor: { value: new THREE.Color(0xffd7a0) },
-      sunDirection: { value: new THREE.Vector3(0.53, 0.78, 0.33).normalize() },
+      topColor: { value: new THREE.Color(0x214a71) },
+      horizonColor: { value: new THREE.Color(0xf4a45d) },
+      groundColor: { value: new THREE.Color(0xcb7a3b) },
+      sunColor: { value: new THREE.Color(0xffde90) },
+      sunDirection: { value: new THREE.Vector3(0.26, 0.78, 0.54).normalize() },
     },
     vertexShader: `
       varying vec3 vWorldDir;
@@ -578,9 +579,9 @@ window.addEventListener("resize", onResize);
 onResize();
 
 // --- Lumières ---
-scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x6d9e5f, 0.95));
-const sunLight = new THREE.DirectionalLight(0xfff0d0, 2.2);
-sunLight.position.set(80, 120, 40);
+scene.add(new THREE.HemisphereLight(0x9cc5ff, 0x5a8d3d, 1.05));
+const sunLight = new THREE.DirectionalLight(0xffd38d, 2.65);
+sunLight.position.set(70, 140, -40);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(1024, 1024);
 sunLight.shadow.camera.left = -140;
@@ -593,9 +594,13 @@ sunLight.shadow.normalBias = 0.028;
 sunLight.shadow.bias = -0.00008;
 scene.add(sunLight);
 
-const fillLight = new THREE.DirectionalLight(0x9ec3ff, 0.38);
-fillLight.position.set(-95, 52, -75);
+const fillLight = new THREE.DirectionalLight(0x6ab9ff, 0.72);
+fillLight.position.set(-110, 70, 70);
 scene.add(fillLight);
+
+const warmRimLight = new THREE.DirectionalLight(0xff6a2b, 0.46);
+warmRimLight.position.set(-40, 40, -100);
+scene.add(warmRimLight);
 
 function applyQualitySettings() {
   const q = currentQuality();
@@ -621,8 +626,8 @@ const ground = new THREE.Mesh(
   new THREE.PlaneGeometry(600, 600),
   new THREE.MeshStandardMaterial({
     map: SURFACE_TEXTURES.grassTexture,
-    color: 0xffffff,
-    roughness: 0.93,
+    color: 0x7ddc52,
+    roughness: 0.88,
     metalness: 0.02,
   })
 );
@@ -805,8 +810,8 @@ function createCarState(playerId, bodyColor, startX, startZ) {
   };
 }
 
-const car1 = createCarState(1, 0xff3b3b, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
-const car2 = createCarState(2, 0x3b7dff, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
+const car1 = createCarState(1, 0xff4f3c, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
+const car2 = createCarState(2, 0x2f7dff, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
 const cars = [car1, car2];
 const soloCars = [car1];
 
@@ -972,10 +977,57 @@ function updateCarPhysics(state, dt, wallMode) {
 
 const raceState = {
   running: false,
+  paused: false,
   elapsed: 0,
   laps: 3,
   wallMode: false,
 };
+
+const pauseOverlay = document.getElementById("pause-overlay");
+const pauseResumeBtn = document.getElementById("pause-resume-btn");
+const pauseRestartBtn = document.getElementById("pause-restart-btn");
+const pauseQuitBtn = document.getElementById("pause-quit-btn");
+
+function setPauseOverlay(visible) {
+  if (!pauseOverlay) return;
+  pauseOverlay.classList.toggle("hidden", !visible);
+  pauseOverlay.setAttribute("aria-hidden", visible ? "false" : "true");
+}
+
+function togglePauseMenu(force) {
+  if (!raceState.running || raceState.finished || raceLocked) {
+    if (force === false) setPauseOverlay(false);
+    return;
+  }
+  const next = force ?? !raceState.paused;
+  raceState.paused = next;
+  setPauseOverlay(next);
+}
+
+if (pauseResumeBtn) {
+  pauseResumeBtn.addEventListener("click", () => togglePauseMenu(false));
+}
+
+if (pauseRestartBtn) {
+  pauseRestartBtn.addEventListener("click", () => {
+    setPauseOverlay(false);
+    window.startRace();
+  });
+}
+
+if (pauseQuitBtn) {
+  pauseQuitBtn.addEventListener("click", () => {
+    setPauseOverlay(false);
+    window.location.reload();
+  });
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    togglePauseMenu();
+  }
+});
 
 // ============================================================
 // Audio runtime (moteur + countdown + victoire)
@@ -1316,6 +1368,8 @@ window.startRace = function startRace() {
   raceState.wallMode = !!window.raceSettings.wallMode;
   raceState.elapsed = 0;
   raceState.running = true;
+  raceState.paused = false;
+  setPauseOverlay(false);
 
   resetCarState(car1, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
   if (!solo) {
@@ -1335,7 +1389,9 @@ function finishRace(winnerState) {
 
   winnerState.race.finished = true;
   raceState.running = false;
+  raceState.paused = false;
   raceLocked = true;
+  setPauseOverlay(false);
   playVictoryAudio(winnerState.playerId);
 
   const loser = winnerState.playerId === 1 ? car2 : car1;
@@ -1455,7 +1511,7 @@ function animate() {
   const rawDt = clock.elapsedTime ? dt : dt;
   const activeCars = getActiveCars();
 
-  if (!raceLocked) {
+  if (!raceState.paused && !raceLocked) {
     raceState.elapsed += dt;
     for (const state of activeCars) {
       const { steerInput, trackInfo, handbrakeActive } = updateCarPhysics(state, dt, raceState.wallMode);
