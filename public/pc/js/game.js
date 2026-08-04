@@ -498,12 +498,12 @@ const camera1 = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 1000);
 const camera2 = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 1000);
 
 function getSelectedMode() {
-  return window.selectedMode || "duel";
+  return window.raceSettings?.mode || window.selectedMode || "duel";
 }
 
 function isSoloMode() {
   const mode = getSelectedMode();
-  return mode === "solo-timed" || mode === "solo-free";
+  return typeof mode === "string" && mode.startsWith("solo");
 }
 
 const QUALITY_LEVELS = [
@@ -840,8 +840,18 @@ for (const state of cars) {
 
 function applyModeVisualState() {
   const solo = isSoloMode();
+  const splitDivider = document.getElementById("split-divider");
+  const splitDividerChip = document.querySelector(".split-divider-chip");
+  const hud2 = document.getElementById("hud-2");
+  const minimapLegendP2 = document.querySelector("#minimap-wrap .legend-2");
+
   car2.parts.group.visible = !solo;
   if (car2.parts.shadowBlob) car2.parts.shadowBlob.visible = !solo;
+
+  if (splitDivider) splitDivider.style.display = solo ? "none" : "block";
+  if (splitDividerChip) splitDividerChip.style.display = solo ? "none" : "block";
+  if (hud2) hud2.style.display = solo ? "none" : "block";
+  if (minimapLegendP2) minimapLegendP2.style.display = solo ? "none" : "inline-flex";
 }
 
 window.addEventListener("mode-changed", () => {

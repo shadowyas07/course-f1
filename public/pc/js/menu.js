@@ -85,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
   function applyMode(mode) {
     selectedMode = mode;
     window.selectedMode = mode;
+    window.raceSettings = window.raceSettings || {};
+    window.raceSettings.mode = mode;
     const config = getModeConfig(mode);
     if (modeBannerTitle) modeBannerTitle.textContent = config.title;
     if (modeBannerDesc) modeBannerDesc.textContent = config.desc;
