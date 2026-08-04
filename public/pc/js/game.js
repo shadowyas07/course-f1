@@ -18,6 +18,26 @@
 import * as THREE from "./vendor/three.module.min.js";
 import { GLTFLoader } from "./vendor/GLTFLoader.js";
 import { buildSpaTrack } from "./track-spa.js";
+let roadMesh = null;
+let roadCollisionTargets = [];
+const roadRaycaster = new THREE.Raycaster();
+const roadDown = new THREE.Vector3(0, -1, 0);
+const worldUp = new THREE.Vector3(0, 1, 0);
+const qSurface = new THREE.Quaternion();
+const qHeading = new THREE.Quaternion();
+const CAR_RIDE_HEIGHT = 0.28;
+
+function getRoadHitAt(x, z) {
+  if (!roadCollisionTargets.length) return null;
+  roadRaycaster.set(new THREE.Vector3(x, 700, z), roadDown);
+  const hits = roadRaycaster.intersectObjects(roadCollisionTargets, true);
+  if (!hits.length) return null;
+  const hit = hits[0];
+  const normal = hit.face
+    ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
+    : worldUp.clone();
+  return { point: hit.point, normal };
+}
 
 // ============================================================
 // Textures procedurales (aucun asset externe requis)
@@ -258,12 +278,20 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
       offsetZ: 0,
     };
 
+    const meshCandidates = [];
+    const roadCandidates = [];
     model.traverse((obj) => {
       if (!obj.isMesh) return;
+      meshCandidates.push(obj);
       obj.castShadow = false;
       obj.receiveShadow = true;
       if (obj.material) {
         obj.material.side = THREE.DoubleSide;
+      }
+
+      const name = String(obj.name || "").toLowerCase();
+      if (/road|track|asphalt|piste|circuit|lane/.test(name)) {
+        roadCandidates.push(obj);
       }
     });
 
@@ -346,7 +374,22 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
     });
 
     sceneRef.add(model);
+    if (roadCandidates.length > 0) {
+      roadCollisionTargets = roadCandidates;
+    } else {
+      roadCollisionTargets = meshCandidates
+        .slice()
+        .sort((a, b) => {
+          const ca = a.geometry?.attributes?.position?.count || 0;
+          const cb = b.geometry?.attributes?.position?.count || 0;
+          return cb - ca;
+        })
+        .slice(0, Math.min(6, meshCandidates.length));
+    }
+    roadMesh = roadCollisionTargets[0] || null;
+
     console.log("[track] GLB piste chargee:", "assets/tracks/race-track-23mb/source/track.glb");
+    console.log("[track] road meshes utilises:", roadCollisionTargets.map((m) => m.name || m.uuid));
   } catch (error) {
     console.warn("[track] Echec chargement GLB, fallback piste procedurale.", error);
   }
@@ -946,7 +989,7 @@ function updateSkidmarks(state, dt) {
   const rearOffset = 1.35;
   const worldPoint = new THREE.Vector3(
     physics.x - Math.sin(physics.heading) * rearOffset,
-    0.05,
+    (physics.y || 0) + 0.05,
     physics.z - Math.cos(physics.heading) * rearOffset
   );
 
@@ -1324,7 +1367,8 @@ function createCarState(playerId, bodyColor, startX, startZ) {
   return {
     playerId,
     parts,
-    physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0, velocity: new THREE.Vector3() },
+    physics: { x: startX, y: 0, z: startZ, heading: 0, speed: 0, driftYaw: 0, velocity: new THREE.Vector3() },
+    surfaceNormal: new THREE.Vector3(0, 1, 0),
     skidState: { lastPoint: null, active: false, cooldown: 0 },
     race: {
       lap: 1,
@@ -1440,11 +1484,10 @@ function updateCarPhysics(state, dt, wallMode) {
   const controls = getControls(state.playerId);
   const physics = state.physics;
 
-  let trackInfo = analyzeTrackPositionFast(physics.x, physics.z, state.race.prevSampleIndex);
-  let maxSpeedNow = PHYSICS_PARAMS.maxSpeed;
-  if (!wallMode && trackInfo.offTrack) {
-    maxSpeedNow = PHYSICS_PARAMS.maxSpeed * PHYSICS_PARAMS.grassMaxSpeedFactor;
-  }
+  let trackInfo = { index: state.race.prevSampleIndex || 0, offTrack: false };
+  const preHit = getRoadHitAt(physics.x, physics.z);
+  const onRoad = !!preHit;
+  const maxSpeedNow = onRoad ? PHYSICS_PARAMS.maxSpeed : PHYSICS_PARAMS.maxSpeed * PHYSICS_PARAMS.grassMaxSpeedFactor;
 
   if (controls.gasPressed) {
     physics.speed += PHYSICS_PARAMS.acceleration * dt;
@@ -1456,7 +1499,7 @@ function updateCarPhysics(state, dt, wallMode) {
     else if (physics.speed < 0) physics.speed = Math.min(0, physics.speed + friction);
   }
 
-  if (!wallMode && trackInfo.offTrack) {
+  if (!onRoad) {
     const grassFriction = PHYSICS_PARAMS.grassFriction * dt;
     if (physics.speed > maxSpeedNow) physics.speed = Math.max(maxSpeedNow, physics.speed - grassFriction);
     if (physics.speed < -maxSpeedNow) physics.speed = Math.min(-maxSpeedNow, physics.speed + grassFriction);
@@ -1467,14 +1510,13 @@ function updateCarPhysics(state, dt, wallMode) {
   const speedRatio = Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed);
   const handbrakeActive = !!controls.handbrakePressed;
   let steerRate = PHYSICS_PARAMS.minSteerRate + speedRatio * (PHYSICS_PARAMS.maxSteerRate - PHYSICS_PARAMS.minSteerRate);
-  if (handbrakeActive) {
-    steerRate *= PHYSICS_PARAMS.handbrakeSteerBoost;
-  }
+  if (handbrakeActive) steerRate *= PHYSICS_PARAMS.handbrakeSteerBoost;
+
   const steerInput = -Math.max(-1, Math.min(1, controls.steerAngle || 0));
   const speedAbs = Math.abs(physics.speed);
   const steerAbs = Math.abs(steerInput);
 
-  if (Math.abs(physics.speed) > 0.3) {
+  if (speedAbs > 0.3) {
     const direction = physics.speed >= 0 ? 1 : -1;
     const headingFactor = handbrakeActive ? PHYSICS_PARAMS.driftHeadingFactor : 1;
     physics.heading += steerInput * steerRate * dt * direction * headingFactor;
@@ -1489,6 +1531,7 @@ function updateCarPhysics(state, dt, wallMode) {
   const canDrift = handbrakeActive
     && speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed
     && steerAbs > PHYSICS_PARAMS.driftMinSteer;
+
   if (canDrift) {
     const driftSpeedRatio = Math.min(1, speedAbs / (PHYSICS_PARAMS.maxSpeed * 0.9));
     const driftTarget = steerInput
@@ -1496,13 +1539,10 @@ function updateCarPhysics(state, dt, wallMode) {
       * (0.55 + driftSpeedRatio * 0.95)
       * PHYSICS_PARAMS.handbrakeSlipBoost;
     const counterSteer = Math.sign(steerInput) === -Math.sign(physics.driftYaw) ? steerInput * PHYSICS_PARAMS.driftCounterSteerAssist : 0;
-    const driftTargetWithCounter = driftTarget + counterSteer;
-    physics.driftYaw += (driftTargetWithCounter - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
+    physics.driftYaw += (driftTarget + counterSteer - physics.driftYaw) * Math.min(1, dt * PHYSICS_PARAMS.driftBuildRate);
   } else {
     const sustainDrift = speedAbs > PHYSICS_PARAMS.handbrakeMinSpeed * 0.75 && steerAbs > 0.22;
-    const recoverRate = sustainDrift
-      ? PHYSICS_PARAMS.driftSustainRecoverRate
-      : PHYSICS_PARAMS.driftRecoverRate;
+    const recoverRate = sustainDrift ? PHYSICS_PARAMS.driftSustainRecoverRate : PHYSICS_PARAMS.driftRecoverRate;
     physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * recoverRate);
   }
 
@@ -1520,39 +1560,41 @@ function updateCarPhysics(state, dt, wallMode) {
   const grip = canDrift ? DRIFT_CONFIG.driftGrip : DRIFT_CONFIG.normalGrip;
   physics.velocity.lerp(targetVelocity, grip);
   if (canDrift) {
-    const slideIntensity = -steerInput * Math.abs(physics.speed) * DRIFT_CONFIG.driftSlideForce * 0.05;
+    const slideIntensity = -steerInput * speedAbs * DRIFT_CONFIG.driftSlideForce * 0.05;
     physics.velocity.addScaledVector(sideDir, slideIntensity);
   }
+
   physics.x += physics.velocity.x * dt;
   physics.z += physics.velocity.z * dt;
 
-  // --- Limites de terrain ---
-  if (wallMode) {
-    const info2 = analyzeTrackPositionFast(physics.x, physics.z, trackInfo.index);
-    if (Math.abs(info2.lateral) > WALL_BOUNDARY) {
-      const clamped = Math.sign(info2.lateral) * WALL_BOUNDARY;
-      physics.x = info2.px + info2.nx * clamped;
-      physics.z = info2.pz + info2.nz * clamped;
-      if (Math.abs(physics.speed) > 4) {
-        spawnDust(physics.x, physics.z, 5);
-        spawnSparks(physics.x, physics.z, 6);
-        if (typeof window.emitGameHaptic === "function") {
-          window.emitGameHaptic(state.playerId, Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed));
-        }
-      }
-      physics.speed *= PHYSICS_PARAMS.wallImpactFactor;
-      trackInfo = { ...info2, offTrack: false };
-    } else {
-      trackInfo = info2;
+  const hit = getRoadHitAt(physics.x, physics.z);
+  const offTrack = !hit;
+  trackInfo.offTrack = offTrack;
+
+  if (hit) {
+    physics.y = hit.point.y + CAR_RIDE_HEIGHT;
+    state.surfaceNormal.copy(hit.normal);
+  } else {
+    state.surfaceNormal.set(0, 1, 0);
+    physics.y = physics.y || 0;
+    if (speedAbs > 0.1) {
+      physics.speed *= Math.max(0, 1 - dt * 3.8);
     }
-  } else if (trackInfo.offTrack && Math.abs(physics.speed) > 2) {
+  }
+
+  if (offTrack && speedAbs > 2) {
     spawnDust(physics.x, physics.z, 2);
     spawnSparks(physics.x, physics.z, 2);
     spawnGrassDebris(physics.x, physics.z, 4);
-  } else if (canDrift && Math.abs(steerInput) > 0.2) {
+  } else if (canDrift && steerAbs > 0.2) {
     spawnDust(physics.x, physics.z, 2);
-  } else if (controls.brakePressed && Math.abs(physics.speed) > PHYSICS_PARAMS.maxSpeed * 0.5) {
+  } else if (controls.brakePressed && speedAbs > PHYSICS_PARAMS.maxSpeed * 0.5) {
     spawnDust(physics.x, physics.z, 1);
+  }
+
+  if (centerPoints.length > 3) {
+    trackInfo = analyzeTrackPositionFast(physics.x, physics.z, state.race.prevSampleIndex);
+    trackInfo.offTrack = offTrack;
   }
 
   return { steerInput, trackInfo, handbrakeActive, driftSmokeActive };
@@ -2186,7 +2228,9 @@ function animate() {
     for (const state of activeCars) {
       const { steerInput, trackInfo, handbrakeActive, driftSmokeActive } = updateCarPhysics(state, dt, raceState.wallMode);
       if (driftSmokeActive) anyDriftSmokeActive = true;
-      updateLapTracking(state, trackInfo.index);
+      if (trackInfo && Number.isFinite(trackInfo.index)) {
+        updateLapTracking(state, trackInfo.index);
+      }
       updateSkidmarks(state, dt);
       applyVisuals(state, steerInput, dt, handbrakeActive);
       updateMotionTrail(state);
@@ -2249,11 +2293,14 @@ applyQualitySettings();
 
 function applyVisuals(state, steerInput, dt, handbrakeActive) {
   const { group, frontWheelPivots, rollingWheels, brakeLights } = state.parts;
-  group.position.set(state.physics.x, 0, state.physics.z);
-  group.rotation.y = state.physics.heading;
+  const normal = state.surfaceNormal || worldUp;
+  qSurface.setFromUnitVectors(worldUp, normal);
+  qHeading.setFromAxisAngle(normal, state.physics.heading);
+  group.quaternion.copy(qSurface).multiply(qHeading);
+  group.position.set(state.physics.x, state.physics.y || 0, state.physics.z);
 
   if (state.parts.shadowBlob) {
-    state.parts.shadowBlob.position.set(state.physics.x, 0.03, state.physics.z);
+    state.parts.shadowBlob.position.set(state.physics.x, (state.physics.y || 0) + 0.03, state.physics.z);
     const speedFactor = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
     state.parts.shadowBlob.material.opacity = 0.24 + speedFactor * 0.16;
   }
