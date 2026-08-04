@@ -43,12 +43,17 @@ const autoJoinRequest = hasRoomParams && initialRoomId ? { roomId: initialRoomId
 let isPaused = false;
 let lastSentSteer = 0;
 let wheelSendTimer = null;
+let lastPacketTs = 0;
+const INPUT_THROTTLE_MS = 16;
 let steerMode = "wheel";
 let tiltAvailable = typeof window.DeviceOrientationEvent !== "undefined" && typeof DeviceOrientationEvent.requestPermission !== "function";
 let tiltPermissionState = "unknown";
 let tiltSmoothedGamma = 0;
 let buttonLeftPressed = false;
 let buttonRightPressed = false;
+let activeGas = false;
+let activeBrake = false;
+let activeHandbrake = false;
 let pendingJoinRequest = autoJoinRequest;
 let wakeLockSentinel = null;
 
@@ -444,31 +449,38 @@ wheelEl.addEventListener("pointermove", onWheelPointerMove);
 wheelEl.addEventListener("pointerup", onWheelPointerUp);
 wheelEl.addEventListener("pointercancel", onWheelPointerUp);
 
+function sendCompactInput() {
+  if (isPaused) return;
+  const now = Date.now();
+  if (now - lastPacketTs < INPUT_THROTTLE_MS) return;
+  lastPacketTs = now;
+
+  let steeringSource = currentRotation;
+  if (steerMode === "tilt" && tiltAvailable) {
+    steeringSource = tiltSmoothedGamma;
+    if (!isDragging) {
+      applyWheelRotation(steeringSource);
+    }
+  } else if (steerMode === "buttons") {
+    const target = (buttonRightPressed ? 1 : 0) - (buttonLeftPressed ? 1 : 0);
+    const targetRotation = target * STEER_EFFECTIVE_RANGE;
+    const lerp = 0.3;
+    const next = currentRotation + (targetRotation - currentRotation) * lerp;
+    applyWheelRotation(next);
+    steeringSource = next;
+  }
+
+  const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource));
+  const direction = Number((clamped / STEER_EFFECTIVE_RANGE).toFixed(3));
+  const payload = [direction, activeGas ? 1 : 0, activeBrake ? 1 : 0, activeHandbrake ? 1 : 0];
+  if (Math.abs(direction - lastSentSteer) < 0.001 && payload[1] === 0 && payload[2] === 0 && payload[3] === 0) return;
+  lastSentSteer = direction;
+  socket.emit("steer", { payload });
+}
+
 function startWheelSending() {
   if (wheelSendTimer) clearInterval(wheelSendTimer);
-  wheelSendTimer = setInterval(() => {
-    if (isPaused) return;
-    let steeringSource = currentRotation;
-
-    if (steerMode === "tilt" && tiltAvailable) {
-      steeringSource = tiltSmoothedGamma;
-      if (!isDragging) {
-        applyWheelRotation(steeringSource);
-      }
-    } else if (steerMode === "buttons") {
-      const target = (buttonRightPressed ? 1 : 0) - (buttonLeftPressed ? 1 : 0);
-      const targetRotation = target * STEER_EFFECTIVE_RANGE;
-      const lerp = 0.3;
-      const next = currentRotation + (targetRotation - currentRotation) * lerp;
-      applyWheelRotation(next);
-      steeringSource = next;
-    }
-
-    const clamped = Math.max(-STEER_EFFECTIVE_RANGE, Math.min(STEER_EFFECTIVE_RANGE, steeringSource));
-    if (Math.abs(clamped - lastSentSteer) < 0.01) return;
-    lastSentSteer = clamped;
-    socket.emit("steer", { gamma: clamped, beta: 0 });
-  }, 50);
+  wheelSendTimer = setInterval(sendCompactInput, 16);
 }
 
 function handleTiltEvent(event) {
@@ -558,6 +570,9 @@ function bindPressRelease(btnEl, pressEvent, releaseEvent) {
     if (isPressed) return;
     isPressed = true;
     btnEl.classList.add("active");
+    if (pressEvent === "gas_press") activeGas = true;
+    if (pressEvent === "brake_press") activeBrake = true;
+    if (pressEvent === "handbrake_press") activeHandbrake = true;
     socket.emit(pressEvent);
     if (navigator.vibrate) navigator.vibrate(15);
   };
@@ -567,6 +582,9 @@ function bindPressRelease(btnEl, pressEvent, releaseEvent) {
     if (!isPressed) return;
     isPressed = false;
     btnEl.classList.remove("active");
+    if (releaseEvent === "gas_release") activeGas = false;
+    if (releaseEvent === "brake_release") activeBrake = false;
+    if (releaseEvent === "handbrake_release") activeHandbrake = false;
     socket.emit(releaseEvent);
   };
 

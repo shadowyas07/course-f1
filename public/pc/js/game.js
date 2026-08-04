@@ -161,7 +161,60 @@ function buildTrackMeshes() {
   group.add(meshFromRibbon(road, { surface: "road", vertexColors: false }));
   group.add(meshFromRibbon(outerCurb, { surface: "curb", vertexColors: true }));
   group.add(meshFromRibbon(innerCurb, { surface: "curb", vertexColors: true }));
+  group.add(buildTrackCenterLine());
+  group.add(buildTrackDecorations());
   group.add(buildStartLine());
+  return group;
+}
+
+function buildTrackCenterLine() {
+  const points = centerPoints.map((p) => new THREE.Vector3(p.x, 0.045, p.z));
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  geometry.computeLineDistances();
+  const material = new THREE.LineDashedMaterial({
+    color: 0xffe08a,
+    dashSize: 1.8,
+    gapSize: 1.4,
+    linewidth: 2,
+  });
+  const line = new THREE.LineLoop(geometry, material);
+  line.computeLineDistances();
+  return line;
+}
+
+function buildTrackDecorations() {
+  const group = new THREE.Group();
+  const markerCount = 24;
+  for (let i = 0; i < markerCount; i++) {
+    const s = (i / markerCount) * TRACK.perimeter + 3.4;
+    const p = trackPointAt(s);
+    const s2 = trackPointAt(s + 0.8);
+    const tx = s2.x - p.x;
+    const tz = s2.z - p.z;
+    const len = Math.hypot(tx, tz) || 1;
+    const nx = -tz / len;
+    const nz = tx / len;
+    const side = i % 2 === 0 ? 1 : -1;
+    const dist = TRACK.roadHalfWidth + TRACK.curbWidth + 4.8 + (i % 3) * 1.2;
+
+    const marker = new THREE.Group();
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x704427, roughness: 0.95 });
+    const headMat = new THREE.MeshStandardMaterial({
+      color: i % 2 === 0 ? 0xff7d2b : 0xf4efe8,
+      emissive: i % 2 === 0 ? 0x552200 : 0x2a2a2a,
+      emissiveIntensity: 0.7,
+      roughness: 0.35,
+    });
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.9, 0.16), baseMat);
+    base.position.y = 0.45;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.24, 0.22), headMat);
+    head.position.y = 1.06;
+    marker.add(base);
+    marker.add(head);
+    marker.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
+    marker.rotation.y = Math.atan2(nx, nz) + Math.PI / 2;
+    group.add(marker);
+  }
   return group;
 }
 
@@ -246,27 +299,28 @@ function meshFromRibbon({ positions, colors, uvs, indices }, options = {}) {
 // Décor
 // ============================================================
 
-function buildTree() {
-  const tree = new THREE.Group();
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6c3f22, roughness: 1 });
-  const leavesMat = new THREE.MeshStandardMaterial({ color: 0x4bae4d, roughness: 0.85 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, 1.6, 6), trunkMat);
-  trunk.position.y = 0.8;
-  trunk.castShadow = false;
-  tree.add(trunk);
-  [1.6, 1.2, 0.8].forEach((r, i) => {
-    const leaf = new THREE.Mesh(new THREE.ConeGeometry(r, 1.6, 7), leavesMat);
-    leaf.position.y = 1.6 + i * 1.05;
-    leaf.castShadow = false;
-    tree.add(leaf);
-  });
-  return tree;
-}
-
 function buildScenery() {
   const group = new THREE.Group();
   const minClear = TRACK.roadHalfWidth + TRACK.curbWidth + 6;
   const count = 90;
+  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.32, 1.6, 6);
+  const leafGeo = new THREE.ConeGeometry(1.2, 1.6, 7);
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6c3f22, roughness: 1 });
+  const leafMat = new THREE.MeshStandardMaterial({
+    color: 0x4bae4d,
+    emissive: 0x10240d,
+    emissiveIntensity: 0.16,
+    roughness: 0.82,
+  });
+
+  const trunkInstanced = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
+  trunkInstanced.castShadow = false;
+  trunkInstanced.receiveShadow = true;
+  const leafInstanced = new THREE.InstancedMesh(leafGeo, leafMat, count);
+  leafInstanced.castShadow = false;
+  leafInstanced.receiveShadow = true;
+
+  const dummy = new THREE.Object3D();
   for (let i = 0; i < count; i++) {
     const s = (i / count) * TRACK.perimeter + (Math.random() - 0.5) * 4;
     const p = trackPointAt(s);
@@ -278,14 +332,21 @@ function buildScenery() {
     const nz = tx / len;
     const side = i % 2 === 0 ? 1 : -1;
     const dist = minClear + Math.random() * 22;
-
-    const tree = buildTree();
-    tree.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
     const scale = 0.8 + Math.random() * 0.7;
-    tree.scale.set(scale, scale, scale);
-    tree.rotation.y = Math.random() * Math.PI * 2;
-    group.add(tree);
+
+    dummy.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
+    dummy.scale.set(scale, scale, scale);
+    dummy.rotation.y = Math.random() * Math.PI * 2;
+    dummy.updateMatrix();
+
+    trunkInstanced.setMatrixAt(i, dummy.matrix);
+    leafInstanced.setMatrixAt(i, dummy.matrix);
   }
+
+  trunkInstanced.instanceMatrix.needsUpdate = true;
+  leafInstanced.instanceMatrix.needsUpdate = true;
+  group.add(trunkInstanced);
+  group.add(leafInstanced);
   return group;
 }
 
@@ -441,13 +502,13 @@ if ("physicallyCorrectLights" in renderer) renderer.physicallyCorrectLights = tr
 if ("useLegacyLights" in renderer) renderer.useLegacyLights = false;
 if ("outputColorSpace" in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.12;
+renderer.toneMappingExposure = 1.28;
 renderer.setScissorTest(true);
 renderer.sortObjects = true;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x224a6b);
-scene.fog = new THREE.Fog(0xf09a61, 90, 320);
+scene.background = new THREE.Color(0x132b45);
+scene.fog = new THREE.Fog(0xb86135, 90, 320);
 
 function buildSkyDome() {
   const skyGeo = new THREE.SphereGeometry(900, 24, 16);
@@ -455,11 +516,11 @@ function buildSkyDome() {
     side: THREE.BackSide,
     depthWrite: false,
     uniforms: {
-      topColor: { value: new THREE.Color(0x214a71) },
-      horizonColor: { value: new THREE.Color(0xf4a45d) },
-      groundColor: { value: new THREE.Color(0xcb7a3b) },
-      sunColor: { value: new THREE.Color(0xffde90) },
-      sunDirection: { value: new THREE.Vector3(0.26, 0.78, 0.54).normalize() },
+      topColor: { value: new THREE.Color(0x0f2346) },
+      horizonColor: { value: new THREE.Color(0xf28b4b) },
+      groundColor: { value: new THREE.Color(0x7a4424) },
+      sunColor: { value: new THREE.Color(0xffd06e) },
+      sunDirection: { value: new THREE.Vector3(0.22, 0.74, 0.64).normalize() },
     },
     vertexShader: `
       varying vec3 vWorldDir;
@@ -479,11 +540,12 @@ function buildSkyDome() {
 
       void main() {
         float y = clamp(vWorldDir.y * 0.5 + 0.5, 0.0, 1.0);
-        vec3 sky = mix(horizonColor, topColor, smoothstep(0.35, 1.0, y));
-        sky = mix(groundColor, sky, smoothstep(0.0, 0.35, y));
+        vec3 sky = mix(horizonColor, topColor, smoothstep(0.18, 1.0, y));
+        sky = mix(groundColor, sky, smoothstep(0.0, 0.28, y));
         float sunDot = max(dot(normalize(vWorldDir), normalize(sunDirection)), 0.0);
-        float sunGlow = pow(sunDot, 280.0) + pow(sunDot, 32.0) * 0.22;
-        vec3 col = sky + sunColor * sunGlow;
+        float sunGlow = pow(sunDot, 320.0) + pow(sunDot, 18.0) * 0.55;
+        float horizonGlow = smoothstep(0.0, 0.16, max(0.0, 1.0 - abs(vWorldDir.y)));
+        vec3 col = sky + sunColor * sunGlow + vec3(0.08, 0.04, 0.0) * horizonGlow;
         gl_FragColor = vec4(col, 1.0);
       }
     `,
@@ -579,8 +641,8 @@ window.addEventListener("resize", onResize);
 onResize();
 
 // --- Lumières ---
-scene.add(new THREE.HemisphereLight(0x9cc5ff, 0x5a8d3d, 1.05));
-const sunLight = new THREE.DirectionalLight(0xffd38d, 2.65);
+scene.add(new THREE.HemisphereLight(0x9cc5ff, 0x5a8d3d, 1.12));
+const sunLight = new THREE.DirectionalLight(0xffd38d, 3.0);
 sunLight.position.set(70, 140, -40);
 sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(1024, 1024);
@@ -594,13 +656,17 @@ sunLight.shadow.normalBias = 0.028;
 sunLight.shadow.bias = -0.00008;
 scene.add(sunLight);
 
-const fillLight = new THREE.DirectionalLight(0x6ab9ff, 0.72);
+const fillLight = new THREE.DirectionalLight(0x6ab9ff, 0.82);
 fillLight.position.set(-110, 70, 70);
 scene.add(fillLight);
 
-const warmRimLight = new THREE.DirectionalLight(0xff6a2b, 0.46);
+const warmRimLight = new THREE.DirectionalLight(0xff6a2b, 0.58);
 warmRimLight.position.set(-40, 40, -100);
 scene.add(warmRimLight);
+
+const accentLight = new THREE.PointLight(0xffb45b, 8, 120, 2);
+accentLight.position.set(20, 18, 30);
+scene.add(accentLight);
 
 function applyQualitySettings() {
   const q = currentQuality();
@@ -654,7 +720,20 @@ for (let i = 0; i < DUST_COUNT; i++) dustPositions[i * 3 + 1] = -100;
 dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
 const dustMat = new THREE.PointsMaterial({ color: 0xcabf9a, size: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
 scene.add(new THREE.Points(dustGeo, dustMat));
+
+const SPARK_COUNT = 140;
+const sparkGeo = new THREE.BufferGeometry();
+const sparkPositions = new Float32Array(SPARK_COUNT * 3);
+const sparkVelocities = new Array(SPARK_COUNT).fill(null).map(() => new THREE.Vector3());
+const sparkLife = new Float32Array(SPARK_COUNT);
+let sparkNeedsUpload = false;
+for (let i = 0; i < SPARK_COUNT; i++) sparkPositions[i * 3 + 1] = -100;
+sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
+const sparkMat = new THREE.PointsMaterial({ color: 0xfef2bf, size: 0.18, transparent: true, opacity: 0.95, depthWrite: false });
+scene.add(new THREE.Points(sparkGeo, sparkMat));
+
 let dustCursor = 0;
+let sparkCursor = 0;
 
 function spawnDust(x, z, count) {
   const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
@@ -668,6 +747,20 @@ function spawnDust(x, z, count) {
     dustLife[i] = 0.6 + Math.random() * 0.4;
   }
   dustNeedsUpload = true;
+}
+
+function spawnSparks(x, z, count) {
+  const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
+  for (let n = 0; n < spawnCount; n++) {
+    const i = sparkCursor;
+    sparkCursor = (sparkCursor + 1) % SPARK_COUNT;
+    sparkPositions[i * 3] = x + (Math.random() - 0.5) * 0.5;
+    sparkPositions[i * 3 + 1] = 0.16;
+    sparkPositions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.5;
+    sparkVelocities[i].set((Math.random() - 0.5) * 2.2, 1.4 + Math.random() * 1.6, (Math.random() - 0.5) * 2.2);
+    sparkLife[i] = 0.35 + Math.random() * 0.25;
+  }
+  sparkNeedsUpload = true;
 }
 
 function updateDust(dt) {
@@ -692,6 +785,30 @@ function updateDust(dt) {
   }
 }
 
+function updateSparks(dt) {
+  let dirty = false;
+  for (let i = 0; i < SPARK_COUNT; i++) {
+    if (sparkLife[i] <= 0) continue;
+    sparkLife[i] -= dt;
+    if (sparkLife[i] <= 0) {
+      sparkPositions[i * 3 + 1] = -100;
+      dirty = true;
+      continue;
+    }
+    sparkPositions[i * 3] += sparkVelocities[i].x * dt;
+    sparkPositions[i * 3 + 1] += sparkVelocities[i].y * dt;
+    sparkPositions[i * 3 + 2] += sparkVelocities[i].z * dt;
+    sparkVelocities[i].y -= 3.2 * dt;
+    sparkVelocities[i].x *= 0.94;
+    sparkVelocities[i].z *= 0.94;
+    dirty = true;
+  }
+  if (dirty || sparkNeedsUpload) {
+    sparkGeo.attributes.position.needsUpdate = true;
+    sparkNeedsUpload = false;
+  }
+}
+
 // ============================================================
 // Physique arcade
 // ============================================================
@@ -701,22 +818,22 @@ const PHYSICS_PARAMS = {
   acceleration: 22,
   brakeDeceleration: 40,
   naturalFriction: 8,
-  maxSteerRate: 2.6,
+  maxSteerRate: 2.55,
   minSteerRate: 1.1,
   grassMaxSpeedFactor: 0.45,
   grassFriction: 26,
-  wallImpactFactor: 0.35, // vitesse conservée après un choc contre le mur
-  handbrakeDeceleration: 7.5,
-  handbrakeSteerBoost: 2.35,
+  wallImpactFactor: 0.35,
+  handbrakeDeceleration: 7.2,
+  handbrakeSteerBoost: 1.9,
   handbrakeMinSpeed: 4.2,
-  handbrakeSlipBoost: 1.9,
-  driftBuildRate: 6.2,
-  driftRecoverRate: 1.25,
-  driftSustainRecoverRate: 0.42,
+  handbrakeSlipBoost: 1.7,
+  driftBuildRate: 6.6,
+  driftRecoverRate: 1.05,
+  driftSustainRecoverRate: 0.32,
   driftMinSteer: 0.06,
-  driftMaxAngle: 1.15,
-  driftHeadingFactor: 0.56,
-  driftCounterSteerAssist: 0.22,
+  driftMaxAngle: 1.35,
+  driftHeadingFactor: 0.7,
+  driftCounterSteerAssist: 0.28,
 };
 
 /**
@@ -796,6 +913,7 @@ function createCarState(playerId, bodyColor, startX, startZ) {
     playerId,
     parts,
     physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0 },
+    skidState: { lastPoint: null, active: false },
     race: {
       lap: 1,
       lapStartTime: 0,
@@ -914,7 +1032,7 @@ function updateCarPhysics(state, dt, wallMode) {
   if (Math.abs(physics.speed) > 0.3) {
     const direction = physics.speed >= 0 ? 1 : -1;
     const headingFactor = handbrakeActive ? PHYSICS_PARAMS.driftHeadingFactor : 1;
-    physics.heading -= steerInput * steerRate * dt * direction * headingFactor;
+    physics.heading += steerInput * steerRate * dt * direction * headingFactor;
   }
 
   if (handbrakeActive) {
@@ -954,7 +1072,13 @@ function updateCarPhysics(state, dt, wallMode) {
       const clamped = Math.sign(info2.lateral) * WALL_BOUNDARY;
       physics.x = info2.px + info2.nx * clamped;
       physics.z = info2.pz + info2.nz * clamped;
-      if (Math.abs(physics.speed) > 4) spawnDust(physics.x, physics.z, 5);
+      if (Math.abs(physics.speed) > 4) {
+        spawnDust(physics.x, physics.z, 5);
+        spawnSparks(physics.x, physics.z, 6);
+        if (typeof window.emitGameHaptic === "function") {
+          window.emitGameHaptic(state.playerId, Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed));
+        }
+      }
       physics.speed *= PHYSICS_PARAMS.wallImpactFactor;
       trackInfo = { ...info2, offTrack: false };
     } else {
@@ -962,6 +1086,7 @@ function updateCarPhysics(state, dt, wallMode) {
     }
   } else if (trackInfo.offTrack && Math.abs(physics.speed) > 2) {
     spawnDust(physics.x, physics.z, 2);
+    spawnSparks(physics.x, physics.z, 2);
   } else if (canDrift && Math.abs(steerInput) > 0.2) {
     spawnDust(physics.x, physics.z, 2);
   } else if (controls.brakePressed && Math.abs(physics.speed) > PHYSICS_PARAMS.maxSpeed * 0.5) {
@@ -1533,6 +1658,7 @@ function animate() {
   if (hudAccumulator >= PERF.hudInterval) hudAccumulator = 0;
 
   updateDust(dt);
+  updateSparks(dt);
   if (minimapAccumulator >= PERF.minimapInterval) {
     drawMinimap();
     minimapAccumulator = 0;
@@ -1576,7 +1702,7 @@ function applyVisuals(state, steerInput, dt, handbrakeActive) {
     state.parts.shadowBlob.material.opacity = 0.24 + speedFactor * 0.16;
   }
 
-  const visualSteerAngle = -steerInput * 0.5;
+  const visualSteerAngle = steerInput * 0.5;
   frontWheelPivots.forEach((pivot) => (pivot.rotation.y = visualSteerAngle));
   const wheelSpin = (state.physics.speed / 0.42) * dt;
   rollingWheels.forEach((wheel) => (wheel.rotation.x += wheelSpin));

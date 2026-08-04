@@ -15,6 +15,12 @@ const socket = io();
 function freshControls() {
   return { steerAngle: 0, gasPressed: false, brakePressed: false, handbrakePressed: false, connected: false };
 }
+
+window.emitGameHaptic = function emitGameHaptic(playerId, intensity = 1) {
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(Math.max(12, Math.round(intensity * 70)));
+  }
+};
 window.carControls1 = freshControls();
 window.carControls2 = freshControls();
 
@@ -158,9 +164,13 @@ function controlsFor(player) {
   return player === 2 ? window.carControls2 : window.carControls1;
 }
 
-socket.on("steer", ({ player, gamma }) => {
-  const clamped = Math.max(-90, Math.min(90, gamma));
-  controlsFor(player).steerAngle = clamped / 90; // normalisé entre -1 et 1
+socket.on("steer", ({ player, payload }) => {
+  const [direction, acceleration, brake, drift] = Array.isArray(payload) ? payload : [0, 0, 0, 0];
+  const steerValue = Math.max(-1, Math.min(1, Number(direction) || 0));
+  controlsFor(player).steerAngle = steerValue;
+  controlsFor(player).gasPressed = !!acceleration;
+  controlsFor(player).brakePressed = !!brake;
+  controlsFor(player).handbrakePressed = !!drift;
 });
 
 socket.on("gas_press", ({ player }) => {

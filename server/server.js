@@ -238,7 +238,7 @@ io.on("connection", (socket) => {
     io.to(room.pcSocketId).emit(eventName, { player, ...payload });
   };
 
-  socket.on("steer", forwardToPc("steer"));           // { gamma, beta }
+  socket.on("steer", forwardToPc("steer"));           // [direction, acceleration, frein, drift]
   socket.on("gas_press", forwardToPc("gas_press"));
   socket.on("gas_release", forwardToPc("gas_release"));
   socket.on("brake_press", forwardToPc("brake_press"));
