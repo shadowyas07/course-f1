@@ -221,6 +221,12 @@ function initializeSpaTrack(sceneRef) {
     addGround: false,
   });
 
+  // On garde la piste procedurale pour la physique/laps, mais on masque son visuel
+  // pour afficher uniquement le vrai circuit GLB.
+  if (spaTrack.roadMesh) spaTrack.roadMesh.visible = false;
+  if (spaTrack.curbMesh) spaTrack.curbMesh.visible = false;
+  if (spaTrack.startLine) spaTrack.startLine.visible = false;
+
   centerPoints.length = 0;
   for (const p of spaTrack.centerPoints) {
     centerPoints.push({ x: p.x, z: p.z });
@@ -254,22 +260,62 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
       }
     });
 
-    const box = new THREE.Box3().setFromObject(model);
+    // Certains GLB arrivent avec un axe different (piste verticale). On cherche
+    // automatiquement l'orientation la plus "plate".
+    const xCandidates = [0, -Math.PI / 2, Math.PI / 2, Math.PI];
+    const zCandidates = [0, -Math.PI / 2, Math.PI / 2, Math.PI];
+    let best = { rx: 0, rz: 0, score: Infinity };
+    const testBox = new THREE.Box3();
+    const testSize = new THREE.Vector3();
+
+    for (const rx of xCandidates) {
+      for (const rz of zCandidates) {
+        model.rotation.set(rx, 0, rz);
+        model.updateMatrixWorld(true);
+        testBox.setFromObject(model);
+        testBox.getSize(testSize);
+        const flatScore = testSize.y / Math.max(1e-3, testSize.x + testSize.z);
+        if (flatScore < best.score) {
+          best = { rx, rz, score: flatScore };
+        }
+      }
+    }
+
+    model.rotation.set(best.rx, 0, best.rz);
+    model.updateMatrixWorld(true);
+
+    let box = new THREE.Box3().setFromObject(model);
     const size = new THREE.Vector3();
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
 
-    const targetX = Math.max(10, (bounds.maxX - bounds.minX) * 1.04);
-    const targetZ = Math.max(10, (bounds.maxZ - bounds.minZ) * 1.04);
+    const targetX = Math.max(10, bounds.maxX - bounds.minX);
+    const targetZ = Math.max(10, bounds.maxZ - bounds.minZ);
     const sx = targetX / Math.max(0.001, size.x);
     const sz = targetZ / Math.max(0.001, size.z);
     const scale = Math.min(sx, sz);
     model.scale.setScalar(scale);
 
-    model.position.x = bounds.centerX - center.x * scale;
-    model.position.z = bounds.centerZ - center.z * scale;
-    model.position.y = 0.02 - box.min.y * scale;
+    model.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(model);
+    box.getCenter(center);
+
+    model.position.x = bounds.centerX - center.x;
+    model.position.z = bounds.centerZ - center.z;
+    model.position.y += 0.03 - box.min.y;
+
+    model.updateMatrixWorld(true);
+    box = new THREE.Box3().setFromObject(model);
+    const ySpan = box.max.y - box.min.y;
+    console.log("[track] GLB orientation/fit:", {
+      rx: best.rx,
+      rz: best.rz,
+      scale,
+      minY: box.min.y,
+      maxY: box.max.y,
+      ySpan,
+    });
 
     sceneRef.add(model);
     console.log("[track] GLB piste chargee:", "assets/tracks/race-track-23mb/source/track.glb");
