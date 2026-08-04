@@ -31,7 +31,7 @@ function makeRepeatingCanvasTexture(size, painter, repeatX, repeatY) {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(repeatX, repeatY);
-  tex.anisotropy = 8;
+  tex.anisotropy = 2;
   tex.needsUpdate = true;
   return tex;
 }
@@ -142,6 +142,7 @@ const PERF = {
   hudInterval: 1 / 12,
   minimapInterval: 1 / 15,
   trackSearchRange: 28,
+  fpsUpdateInterval: 0.5,
 };
 
 // ============================================================
@@ -431,8 +432,8 @@ function buildCar(bodyColor) {
 // ============================================================
 
 const canvas = document.getElementById("game-canvas");
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 if ("physicallyCorrectLights" in renderer) renderer.physicallyCorrectLights = true;
@@ -448,7 +449,7 @@ scene.background = new THREE.Color(0x86c5e8);
 scene.fog = new THREE.Fog(0x8ec6e2, 130, 380);
 
 function buildSkyDome() {
-  const skyGeo = new THREE.SphereGeometry(900, 48, 32);
+  const skyGeo = new THREE.SphereGeometry(900, 24, 16);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
@@ -489,7 +490,8 @@ function buildSkyDome() {
   return new THREE.Mesh(skyGeo, skyMat);
 }
 
-scene.add(buildSkyDome());
+const skyDome = buildSkyDome();
+scene.add(skyDome);
 
 const BASE_FOV = 65;
 const camera1 = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 1000);
@@ -502,6 +504,57 @@ function getSelectedMode() {
 function isSoloMode() {
   const mode = getSelectedMode();
   return mode === "solo-timed" || mode === "solo-free";
+}
+
+const QUALITY_LEVELS = [
+  {
+    name: "LOW",
+    soloPixelRatio: 0.85,
+    duelPixelRatio: 0.7,
+    shadows: false,
+    shadowMapSize: 1024,
+    dustLimit: 100,
+    dustSpawnScale: 0.5,
+    hudInterval: 1 / 10,
+    minimapInterval: 1 / 8,
+    showSky: false,
+  },
+  {
+    name: "MED",
+    soloPixelRatio: 1.0,
+    duelPixelRatio: 0.85,
+    shadows: true,
+    shadowMapSize: 1024,
+    dustLimit: 150,
+    dustSpawnScale: 0.72,
+    hudInterval: 1 / 12,
+    minimapInterval: 1 / 12,
+    showSky: true,
+  },
+  {
+    name: "HIGH",
+    soloPixelRatio: 1.2,
+    duelPixelRatio: 1.0,
+    shadows: true,
+    shadowMapSize: 1536,
+    dustLimit: 220,
+    dustSpawnScale: 1.0,
+    hudInterval: 1 / 15,
+    minimapInterval: 1 / 15,
+    showSky: true,
+  },
+];
+
+let qualityLevel = 1;
+let qualityCooldown = 0;
+
+function currentQuality() {
+  return QUALITY_LEVELS[qualityLevel];
+}
+
+function targetPixelRatio() {
+  const q = currentQuality();
+  return Math.min(window.devicePixelRatio, isSoloMode() ? q.soloPixelRatio : q.duelPixelRatio);
 }
 
 function onResize() {
@@ -519,7 +572,7 @@ function onResize() {
   }
 
   renderer.setSize(w, h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, solo ? 1.5 : 1.2));
+  renderer.setPixelRatio(targetPixelRatio());
 }
 window.addEventListener("resize", onResize);
 onResize();
@@ -529,7 +582,7 @@ scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x6d9e5f, 0.95));
 const sunLight = new THREE.DirectionalLight(0xfff0d0, 2.2);
 sunLight.position.set(80, 120, 40);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.mapSize.set(1024, 1024);
 sunLight.shadow.camera.left = -140;
 sunLight.shadow.camera.right = 140;
 sunLight.shadow.camera.top = 140;
@@ -543,6 +596,25 @@ scene.add(sunLight);
 const fillLight = new THREE.DirectionalLight(0x9ec3ff, 0.38);
 fillLight.position.set(-95, 52, -75);
 scene.add(fillLight);
+
+function applyQualitySettings() {
+  const q = currentQuality();
+  PERF.hudInterval = q.hudInterval;
+  PERF.minimapInterval = q.minimapInterval;
+  skyDome.visible = q.showSky;
+
+  renderer.shadowMap.enabled = q.shadows;
+  sunLight.castShadow = q.shadows;
+  if (q.shadows) {
+    sunLight.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
+    sunLight.shadow.needsUpdate = true;
+  }
+
+  activeDustLimit = q.dustLimit;
+  dustSpawnScale = q.dustSpawnScale;
+
+  renderer.setPixelRatio(targetPixelRatio());
+}
 
 // --- Sol ---
 const ground = new THREE.Mesh(
@@ -571,6 +643,8 @@ const dustPositions = new Float32Array(DUST_COUNT * 3);
 const dustVelocities = new Array(DUST_COUNT).fill(null).map(() => new THREE.Vector3());
 const dustLife = new Float32Array(DUST_COUNT);
 let dustNeedsUpload = false;
+let activeDustLimit = DUST_COUNT;
+let dustSpawnScale = 1;
 for (let i = 0; i < DUST_COUNT; i++) dustPositions[i * 3 + 1] = -100;
 dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
 const dustMat = new THREE.PointsMaterial({ color: 0xcabf9a, size: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
@@ -578,9 +652,10 @@ scene.add(new THREE.Points(dustGeo, dustMat));
 let dustCursor = 0;
 
 function spawnDust(x, z, count) {
-  for (let n = 0; n < count; n++) {
+  const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
+  for (let n = 0; n < spawnCount; n++) {
     const i = dustCursor;
-    dustCursor = (dustCursor + 1) % DUST_COUNT;
+    dustCursor = (dustCursor + 1) % activeDustLimit;
     dustPositions[i * 3] = x + (Math.random() - 0.5) * 0.6;
     dustPositions[i * 3 + 1] = 0.1;
     dustPositions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.6;
@@ -592,7 +667,7 @@ function spawnDust(x, z, count) {
 
 function updateDust(dt) {
   let dirty = false;
-  for (let i = 0; i < DUST_COUNT; i++) {
+  for (let i = 0; i < activeDustLimit; i++) {
     if (dustLife[i] <= 0) continue;
     dustLife[i] -= dt;
     if (dustLife[i] <= 0) {
@@ -1291,10 +1366,63 @@ rematchBtn.addEventListener("click", () => {
 const clock = new THREE.Clock();
 let hudAccumulator = 0;
 let minimapAccumulator = 0;
+let fpsAccumulator = 0;
+let fpsFrames = 0;
+let lowFpsTime = 0;
+let highFpsTime = 0;
+
+const fpsBadge = document.createElement("div");
+fpsBadge.style.position = "fixed";
+fpsBadge.style.right = "14px";
+fpsBadge.style.top = "14px";
+fpsBadge.style.zIndex = "99";
+fpsBadge.style.padding = "6px 10px";
+fpsBadge.style.fontFamily = "monospace";
+fpsBadge.style.fontSize = "12px";
+fpsBadge.style.color = "#e9f9ff";
+fpsBadge.style.background = "rgba(3, 10, 16, 0.58)";
+fpsBadge.style.border = "1px solid rgba(90, 190, 220, 0.35)";
+fpsBadge.style.borderRadius = "8px";
+fpsBadge.style.backdropFilter = "blur(4px)";
+fpsBadge.textContent = "FPS: -- | Q: MED";
+document.body.appendChild(fpsBadge);
+
+function maybeAdaptQuality(fps, dt) {
+  if (qualityCooldown > 0) {
+    qualityCooldown -= dt;
+    return;
+  }
+
+  if (fps < 34) {
+    lowFpsTime += dt;
+    highFpsTime = 0;
+  } else if (fps > 56) {
+    highFpsTime += dt;
+    lowFpsTime = 0;
+  } else {
+    lowFpsTime = 0;
+    highFpsTime = 0;
+  }
+
+  if (lowFpsTime > 1.2 && qualityLevel > 0) {
+    qualityLevel -= 1;
+    applyQualitySettings();
+    qualityCooldown = 2.2;
+    lowFpsTime = 0;
+    highFpsTime = 0;
+  } else if (highFpsTime > 4 && qualityLevel < QUALITY_LEVELS.length - 1) {
+    qualityLevel += 1;
+    applyQualitySettings();
+    qualityCooldown = 2.8;
+    lowFpsTime = 0;
+    highFpsTime = 0;
+  }
+}
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
+  const rawDt = clock.elapsedTime ? dt : dt;
   const activeCars = getActiveCars();
 
   if (!raceLocked) {
@@ -1324,6 +1452,16 @@ function animate() {
     minimapAccumulator = 0;
   }
 
+  fpsFrames += 1;
+  fpsAccumulator += rawDt;
+  if (fpsAccumulator >= PERF.fpsUpdateInterval) {
+    const fps = Math.round(fpsFrames / fpsAccumulator);
+    maybeAdaptQuality(fps, fpsAccumulator);
+    fpsBadge.textContent = `FPS: ${fps} | Q: ${currentQuality().name}`;
+    fpsFrames = 0;
+    fpsAccumulator = 0;
+  }
+
   if (isSoloMode()) {
     renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
@@ -1338,6 +1476,8 @@ function animate() {
     renderer.render(scene, camera2);
   }
 }
+
+applyQualitySettings();
 
 function applyVisuals(state, steerInput, dt, handbrakeActive) {
   const { group, frontWheelPivots, rollingWheels, brakeLights } = state.parts;
