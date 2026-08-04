@@ -245,6 +245,7 @@ io.on("connection", (socket) => {
   socket.on("brake_release", forwardToPc("brake_release"));
   socket.on("handbrake_press", forwardToPc("handbrake_press"));
   socket.on("handbrake_release", forwardToPc("handbrake_release"));
+  socket.on("mobile-pause", forwardToPc("mobile-pause"));
 
   socket.on("game-haptic", ({ player, intensity } = {}) => {
     const roomId = socket.data.roomId;

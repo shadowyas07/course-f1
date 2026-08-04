@@ -22,6 +22,13 @@ window.emitGameHaptic = function emitGameHaptic(playerId, intensity = 1) {
     intensity: Math.max(0, Math.min(1, Number(intensity) || 0)),
   });
 };
+
+window.applyRemotePause = function applyRemotePause(paused) {
+  if (typeof window.setGamePaused === "function") {
+    window.setGamePaused(!!paused, "mobile");
+  }
+};
+
 window.carControls1 = freshControls();
 window.carControls2 = freshControls();
 
@@ -196,4 +203,8 @@ socket.on("handbrake_press", ({ player }) => {
 
 socket.on("handbrake_release", ({ player }) => {
   controlsFor(player).handbrakePressed = false;
+});
+
+socket.on("mobile-pause", ({ paused } = {}) => {
+  window.applyRemotePause(!!paused);
 });

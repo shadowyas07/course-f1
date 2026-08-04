@@ -997,6 +997,20 @@ function updateSmoke(dt) {
   }
 }
 
+function clearSmokeImmediate() {
+  let dirty = false;
+  for (let i = 0; i < smokeCount; i++) {
+    if (smokeLife[i] <= 0) continue;
+    smokeLife[i] = 0;
+    smokePositions[i * 3 + 1] = -200;
+    dirty = true;
+  }
+  if (dirty || smokeNeedsUpload) {
+    smokeGeo.attributes.position.needsUpdate = true;
+    smokeNeedsUpload = false;
+  }
+}
+
 // ============================================================
 // Physique arcade
 // ============================================================
@@ -1328,7 +1342,7 @@ function updateCarPhysics(state, dt, wallMode) {
     spawnDust(physics.x, physics.z, 1);
   }
 
-  return { steerInput, trackInfo, handbrakeActive };
+  return { steerInput, trackInfo, handbrakeActive, driftSmokeActive };
 }
 
 // ============================================================
@@ -1363,6 +1377,13 @@ function togglePauseMenu(force) {
   raceState.paused = next;
   setPauseOverlay(next);
 }
+
+window.setGamePaused = function setGamePaused(paused, source = "remote") {
+  if (source === "mobile" && (!raceState.running || raceState.finished || raceLocked)) {
+    return;
+  }
+  togglePauseMenu(!!paused);
+};
 
 if (pauseResumeBtn) {
   pauseResumeBtn.addEventListener("click", () => togglePauseMenu(false));
@@ -1944,12 +1965,17 @@ function animate() {
 
   if (!raceState.paused && !raceLocked) {
     raceState.elapsed += dt;
+    let anyDriftSmokeActive = false;
     for (const state of activeCars) {
-      const { steerInput, trackInfo, handbrakeActive } = updateCarPhysics(state, dt, raceState.wallMode);
+      const { steerInput, trackInfo, handbrakeActive, driftSmokeActive } = updateCarPhysics(state, dt, raceState.wallMode);
+      if (driftSmokeActive) anyDriftSmokeActive = true;
       updateLapTracking(state, trackInfo.index);
       updateSkidmarks(state, dt);
       applyVisuals(state, steerInput, dt, handbrakeActive);
       updateMotionTrail(state);
+    }
+    if (!anyDriftSmokeActive) {
+      clearSmokeImmediate();
     }
   } else {
     for (const state of activeCars) {

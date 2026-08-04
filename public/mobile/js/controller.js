@@ -343,6 +343,7 @@ pauseBtn.addEventListener("click", () => {
   isPaused = !isPaused;
   controllerScreen.style.opacity = isPaused ? "0.6" : "1";
   pauseBtn.classList.toggle("active", isPaused);
+  socket.emit("mobile-pause", { paused: isPaused });
   if (pauseMenu) {
     pauseMenu.classList.toggle("hidden", !isPaused);
     pauseMenu.setAttribute("aria-hidden", isPaused ? "false" : "true");
@@ -362,6 +363,7 @@ if (pauseResumeBtn) {
     isPaused = false;
     controllerScreen.style.opacity = "1";
     pauseBtn.classList.remove("active");
+    socket.emit("mobile-pause", { paused: false });
     if (pauseMenu) {
       pauseMenu.classList.add("hidden");
       pauseMenu.setAttribute("aria-hidden", "true");
