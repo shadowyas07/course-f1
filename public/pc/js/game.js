@@ -320,7 +320,8 @@ function buildScenery() {
   leafInstanced.castShadow = false;
   leafInstanced.receiveShadow = true;
 
-  const dummy = new THREE.Object3D();
+  const trunkDummy = new THREE.Object3D();
+  const leafDummy = new THREE.Object3D();
   for (let i = 0; i < count; i++) {
     const s = (i / count) * TRACK.perimeter + (Math.random() - 0.5) * 4;
     const p = trackPointAt(s);
@@ -334,13 +335,17 @@ function buildScenery() {
     const dist = minClear + Math.random() * 22;
     const scale = 0.8 + Math.random() * 0.7;
 
-    dummy.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
-    dummy.scale.set(scale, scale, scale);
-    dummy.rotation.y = Math.random() * Math.PI * 2;
-    dummy.updateMatrix();
+    trunkDummy.position.set(p.x + nx * dist * side, 0, p.z + nz * dist * side);
+    trunkDummy.scale.set(scale, scale, scale);
+    trunkDummy.rotation.y = Math.random() * Math.PI * 2;
+    trunkDummy.updateMatrix();
+    trunkInstanced.setMatrixAt(i, trunkDummy.matrix);
 
-    trunkInstanced.setMatrixAt(i, dummy.matrix);
-    leafInstanced.setMatrixAt(i, dummy.matrix);
+    leafDummy.position.set(p.x + nx * dist * side, 1.8 * scale, p.z + nz * dist * side);
+    leafDummy.scale.set(scale, scale, scale);
+    leafDummy.rotation.y = trunkDummy.rotation.y;
+    leafDummy.updateMatrix();
+    leafInstanced.setMatrixAt(i, leafDummy.matrix);
   }
 
   trunkInstanced.instanceMatrix.needsUpdate = true;
@@ -704,6 +709,60 @@ scene.add(ground);
 scene.add(buildTrackMeshes());
 scene.add(buildScenery());
 
+const skidMarksGroup = new THREE.Group();
+scene.add(skidMarksGroup);
+const skidMarks = [];
+const MAX_SKIDMARKS = 220;
+const skidMaterial = new THREE.LineBasicMaterial({ color: 0x171717, transparent: true, opacity: 0.82 });
+
+function createSkidmark(from, to) {
+  const geometry = new THREE.BufferGeometry().setFromPoints([from, to]);
+  const line = new THREE.Line(geometry, skidMaterial.clone());
+  line.renderOrder = 1;
+  line.frustumCulled = false;
+  skidMarksGroup.add(line);
+  skidMarks.push(line);
+  if (skidMarks.length > MAX_SKIDMARKS) {
+    const old = skidMarks.shift();
+    skidMarksGroup.remove(old);
+    old.geometry.dispose();
+    old.material.dispose();
+  }
+}
+
+function updateSkidmarks(state, dt) {
+  const controls = getControls(state.playerId);
+  const physics = state.physics;
+  const speed = Math.abs(physics.speed);
+  const shouldSkid = !!controls.handbrakePressed || (!!controls.brakePressed && speed > 16) || (Math.abs(controls.steerAngle || 0) > 0.55 && speed > 18 && Math.abs(physics.driftYaw) > 0.12);
+  const rearOffset = 1.35;
+  const worldPoint = new THREE.Vector3(
+    physics.x - Math.sin(physics.heading) * rearOffset,
+    0.05,
+    physics.z - Math.cos(physics.heading) * rearOffset
+  );
+
+  if (!state.skidState.lastPoint) {
+    state.skidState.lastPoint = worldPoint.clone();
+    state.skidState.cooldown = 0;
+    state.skidState.active = false;
+    return;
+  }
+
+  if (shouldSkid && speed > 8) {
+    state.skidState.cooldown -= dt;
+    if (state.skidState.cooldown <= 0) {
+      createSkidmark(state.skidState.lastPoint, worldPoint);
+      state.skidState.cooldown = 0.045;
+    }
+  } else {
+    state.skidState.cooldown = 0;
+  }
+
+  state.skidState.lastPoint.copy(worldPoint);
+  state.skidState.active = shouldSkid && speed > 8;
+}
+
 // ============================================================
 // Particules de poussière / impact (partagées entre les 2 voitures)
 // ============================================================
@@ -913,7 +972,7 @@ function createCarState(playerId, bodyColor, startX, startZ) {
     playerId,
     parts,
     physics: { x: startX, z: startZ, heading: 0, speed: 0, driftYaw: 0 },
-    skidState: { lastPoint: null, active: false },
+    skidState: { lastPoint: null, active: false, cooldown: 0 },
     race: {
       lap: 1,
       lapStartTime: 0,
@@ -1641,6 +1700,7 @@ function animate() {
     for (const state of activeCars) {
       const { steerInput, trackInfo, handbrakeActive } = updateCarPhysics(state, dt, raceState.wallMode);
       updateLapTracking(state, trackInfo.index);
+      updateSkidmarks(state, dt);
       applyVisuals(state, steerInput, dt, handbrakeActive);
     }
   } else {

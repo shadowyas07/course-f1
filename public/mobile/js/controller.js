@@ -264,6 +264,12 @@ socket.on("joined-room", async ({ success, message, player }) => {
   }
 });
 
+socket.on("game-haptic", ({ intensity = 1 } = {}) => {
+  if (navigator.vibrate) {
+    navigator.vibrate(Math.max(12, Math.round(Number(intensity) * 70)));
+  }
+});
+
 socket.on("pc-disconnected", async () => {
   await releaseKeepAwake();
   setStatus("error", "🔴 JEU FERMÉ");
@@ -561,6 +567,16 @@ bindPressRelease(handbrakeBtn, "handbrake_press", "handbrake_release");
 
 setSteerMode("wheel");
 
+function emitCompactState() {
+  const payload = [
+    Number(lastSentSteer || 0),
+    activeGas ? 1 : 0,
+    activeBrake ? 1 : 0,
+    activeHandbrake ? 1 : 0,
+  ];
+  socket.emit("steer", { payload });
+}
+
 function bindPressRelease(btnEl, pressEvent, releaseEvent) {
   let isPressed = false;
 
@@ -573,7 +589,7 @@ function bindPressRelease(btnEl, pressEvent, releaseEvent) {
     if (pressEvent === "gas_press") activeGas = true;
     if (pressEvent === "brake_press") activeBrake = true;
     if (pressEvent === "handbrake_press") activeHandbrake = true;
-    socket.emit(pressEvent);
+    emitCompactState();
     if (navigator.vibrate) navigator.vibrate(15);
   };
 
@@ -585,7 +601,7 @@ function bindPressRelease(btnEl, pressEvent, releaseEvent) {
     if (releaseEvent === "gas_release") activeGas = false;
     if (releaseEvent === "brake_release") activeBrake = false;
     if (releaseEvent === "handbrake_release") activeHandbrake = false;
-    socket.emit(releaseEvent);
+    emitCompactState();
   };
 
   btnEl.addEventListener("pointerdown", press);

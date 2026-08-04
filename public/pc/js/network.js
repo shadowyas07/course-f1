@@ -17,9 +17,10 @@ function freshControls() {
 }
 
 window.emitGameHaptic = function emitGameHaptic(playerId, intensity = 1) {
-  if (typeof navigator !== "undefined" && navigator.vibrate) {
-    navigator.vibrate(Math.max(12, Math.round(intensity * 70)));
-  }
+  socket.emit("game-haptic", {
+    player: playerId,
+    intensity: Math.max(0, Math.min(1, Number(intensity) || 0)),
+  });
 };
 window.carControls1 = freshControls();
 window.carControls2 = freshControls();

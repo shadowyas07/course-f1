@@ -246,6 +246,13 @@ io.on("connection", (socket) => {
   socket.on("handbrake_press", forwardToPc("handbrake_press"));
   socket.on("handbrake_release", forwardToPc("handbrake_release"));
 
+  socket.on("game-haptic", ({ player, intensity } = {}) => {
+    const roomId = socket.data.roomId;
+    const room = getRoom(roomId);
+    if (!room || !room.players[player]) return;
+    io.to(room.players[player]).emit("game-haptic", { intensity: Number(intensity) || 0 });
+  });
+
   /**
    * Nettoyage à la déconnexion.
    */
