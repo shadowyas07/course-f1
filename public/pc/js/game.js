@@ -289,7 +289,7 @@ function meshFromRibbon({ positions, colors, uvs, indices }, options = {}) {
     clearcoatRoughness: 0.45,
   });
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = false;
+  mesh.castShadow = surface !== "road";
   mesh.receiveShadow = true;
   return mesh;
 }
@@ -313,10 +313,10 @@ function buildScenery() {
   });
 
   const trunkInstanced = new THREE.InstancedMesh(trunkGeo, trunkMat, count);
-  trunkInstanced.castShadow = false;
+  trunkInstanced.castShadow = true;
   trunkInstanced.receiveShadow = true;
   const leafInstanced = new THREE.InstancedMesh(leafGeo, leafMat, count);
-  leafInstanced.castShadow = false;
+  leafInstanced.castShadow = true;
   leafInstanced.receiveShadow = true;
 
   const trunkDummy = new THREE.Object3D();
@@ -677,8 +677,8 @@ function applyQualitySettings() {
   PERF.minimapInterval = q.minimapInterval;
   skyDome.visible = q.showSky;
 
-  renderer.shadowMap.enabled = q.shadows;
-  sunLight.castShadow = q.shadows;
+  renderer.shadowMap.enabled = true;
+  sunLight.castShadow = true;
   if (q.shadows) {
     sunLight.shadow.mapSize.set(q.shadowMapSize, q.shadowMapSize);
     sunLight.shadow.needsUpdate = true;
@@ -778,6 +778,28 @@ dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
 const dustMat = new THREE.PointsMaterial({ color: 0xcabf9a, size: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
 scene.add(new THREE.Points(dustGeo, dustMat));
 
+const grassCount = 120;
+const grassGeo = new THREE.BufferGeometry();
+const grassPositions = new Float32Array(grassCount * 3);
+const grassVelocities = new Array(grassCount).fill(null).map(() => new THREE.Vector3());
+const grassLife = new Float32Array(grassCount);
+let grassNeedsUpload = false;
+for (let i = 0; i < grassCount; i++) grassPositions[i * 3 + 1] = -100;
+grassGeo.setAttribute("position", new THREE.BufferAttribute(grassPositions, 3));
+const grassMat = new THREE.PointsMaterial({ color: 0x9f8a63, size: 0.22, transparent: true, opacity: 0.9, depthWrite: false });
+scene.add(new THREE.Points(grassGeo, grassMat));
+
+const smokeCount = 140;
+const smokeGeo = new THREE.BufferGeometry();
+const smokePositions = new Float32Array(smokeCount * 3);
+const smokeVelocities = new Array(smokeCount).fill(null).map(() => new THREE.Vector3());
+const smokeLife = new Float32Array(smokeCount);
+let smokeNeedsUpload = false;
+for (let i = 0; i < smokeCount; i++) smokePositions[i * 3 + 1] = -100;
+smokeGeo.setAttribute("position", new THREE.BufferAttribute(smokePositions, 3));
+const smokeMat = new THREE.PointsMaterial({ color: 0xd8dde4, size: 0.3, transparent: true, opacity: 0.62, depthWrite: false });
+scene.add(new THREE.Points(smokeGeo, smokeMat));
+
 const SPARK_COUNT = 140;
 const sparkGeo = new THREE.BufferGeometry();
 const sparkPositions = new Float32Array(SPARK_COUNT * 3);
@@ -791,6 +813,8 @@ scene.add(new THREE.Points(sparkGeo, sparkMat));
 
 let dustCursor = 0;
 let sparkCursor = 0;
+let grassCursor = 0;
+let smokeCursor = 0;
 
 function spawnDust(x, z, count) {
   const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
@@ -818,6 +842,34 @@ function spawnSparks(x, z, count) {
     sparkLife[i] = 0.35 + Math.random() * 0.25;
   }
   sparkNeedsUpload = true;
+}
+
+function spawnGrassDebris(x, z, count) {
+  const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
+  for (let n = 0; n < spawnCount; n++) {
+    const i = grassCursor;
+    grassCursor = (grassCursor + 1) % grassCount;
+    grassPositions[i * 3] = x + (Math.random() - 0.5) * 0.8;
+    grassPositions[i * 3 + 1] = 0.08;
+    grassPositions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.8;
+    grassVelocities[i].set((Math.random() - 0.5) * 1.9, 0.8 + Math.random() * 1.2, (Math.random() - 0.5) * 1.9);
+    grassLife[i] = 0.45 + Math.random() * 0.35;
+  }
+  grassNeedsUpload = true;
+}
+
+function spawnSmoke(x, z, count) {
+  const spawnCount = Math.max(1, Math.floor(count * dustSpawnScale));
+  for (let n = 0; n < spawnCount; n++) {
+    const i = smokeCursor;
+    smokeCursor = (smokeCursor + 1) % smokeCount;
+    smokePositions[i * 3] = x + (Math.random() - 0.5) * 0.7;
+    smokePositions[i * 3 + 1] = 0.15;
+    smokePositions[i * 3 + 2] = z + (Math.random() - 0.5) * 0.7;
+    smokeVelocities[i].set((Math.random() - 0.5) * 0.7, 0.8 + Math.random() * 0.8, (Math.random() - 0.5) * 0.7);
+    smokeLife[i] = 0.55 + Math.random() * 0.55;
+  }
+  smokeNeedsUpload = true;
 }
 
 function updateDust(dt) {
@@ -863,6 +915,52 @@ function updateSparks(dt) {
   if (dirty || sparkNeedsUpload) {
     sparkGeo.attributes.position.needsUpdate = true;
     sparkNeedsUpload = false;
+  }
+}
+
+function updateGrassDebris(dt) {
+  let dirty = false;
+  for (let i = 0; i < grassCount; i++) {
+    if (grassLife[i] <= 0) continue;
+    grassLife[i] -= dt;
+    if (grassLife[i] <= 0) {
+      grassPositions[i * 3 + 1] = -100;
+      dirty = true;
+      continue;
+    }
+    grassPositions[i * 3] += grassVelocities[i].x * dt;
+    grassPositions[i * 3 + 1] += grassVelocities[i].y * dt;
+    grassPositions[i * 3 + 2] += grassVelocities[i].z * dt;
+    grassVelocities[i].y -= 2.8 * dt;
+    dirty = true;
+  }
+  if (dirty || grassNeedsUpload) {
+    grassGeo.attributes.position.needsUpdate = true;
+    grassNeedsUpload = false;
+  }
+}
+
+function updateSmoke(dt) {
+  let dirty = false;
+  for (let i = 0; i < smokeCount; i++) {
+    if (smokeLife[i] <= 0) continue;
+    smokeLife[i] -= dt;
+    if (smokeLife[i] <= 0) {
+      smokePositions[i * 3 + 1] = -100;
+      dirty = true;
+      continue;
+    }
+    smokePositions[i * 3] += smokeVelocities[i].x * dt;
+    smokePositions[i * 3 + 1] += smokeVelocities[i].y * dt;
+    smokePositions[i * 3 + 2] += smokeVelocities[i].z * dt;
+    smokeVelocities[i].y += 0.22 * dt;
+    smokeVelocities[i].x *= 0.985;
+    smokeVelocities[i].z *= 0.985;
+    dirty = true;
+  }
+  if (dirty || smokeNeedsUpload) {
+    smokeGeo.attributes.position.needsUpdate = true;
+    smokeNeedsUpload = false;
   }
 }
 
@@ -1015,9 +1113,31 @@ function createShadowBlob() {
   return plane;
 }
 
+function createMotionTrail(color) {
+  const group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.08,
+    depthWrite: false,
+  });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.5, 4.3), mat);
+  body.position.y = 0.5;
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.42, 1.85), mat.clone());
+  cabin.material.opacity = 0.05;
+  cabin.position.set(0, 0.95, -0.15);
+  group.add(body);
+  group.add(cabin);
+  group.visible = false;
+  return group;
+}
+
 for (const state of cars) {
   state.parts.shadowBlob = createShadowBlob();
   scene.add(state.parts.shadowBlob);
+  state.parts.motionTrail = createMotionTrail(state.playerId === 1 ? 0xff8a6f : 0x79b5ff);
+  state.parts.motionTrail.scale.set(1.02, 1.02, 1.02);
+  scene.add(state.parts.motionTrail);
 }
 
 function applyModeVisualState() {
@@ -1126,6 +1246,10 @@ function updateCarPhysics(state, dt, wallMode) {
     physics.driftYaw += (0 - physics.driftYaw) * Math.min(1, dt * recoverRate);
   }
 
+  if (canDrift && Math.abs(physics.driftYaw) > 0.18) {
+    spawnSmoke(physics.x, physics.z, 1 + Math.floor(speedAbs / 12));
+  }
+
   const forwardDir = new THREE.Vector3(Math.sin(physics.heading), 0, Math.cos(physics.heading));
   const sideDir = new THREE.Vector3(Math.cos(physics.heading), 0, -Math.sin(physics.heading));
   const targetVelocity = forwardDir.clone().multiplyScalar(physics.speed);
@@ -1160,6 +1284,7 @@ function updateCarPhysics(state, dt, wallMode) {
   } else if (trackInfo.offTrack && Math.abs(physics.speed) > 2) {
     spawnDust(physics.x, physics.z, 2);
     spawnSparks(physics.x, physics.z, 2);
+    spawnGrassDebris(physics.x, physics.z, 4);
   } else if (canDrift && Math.abs(steerInput) > 0.2) {
     spawnDust(physics.x, physics.z, 2);
   } else if (controls.brakePressed && Math.abs(physics.speed) > PHYSICS_PARAMS.maxSpeed * 0.5) {
@@ -1260,24 +1385,49 @@ function initCarEngineAudio(playerId) {
   const slot = audioState.carSounds[playerId];
   if (!slot || slot.osc) return;
 
-  const osc = ctx.createOscillator();
-  osc.type = "sawtooth";
-  osc.frequency.value = 85;
-
   const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = 900;
+  filter.type = "bandpass";
+  filter.frequency.value = 240;
+  filter.Q.value = 0.8;
 
-  const gain = ctx.createGain();
-  gain.gain.value = 0;
+  const tone = ctx.createOscillator();
+  tone.type = "sawtooth";
+  tone.frequency.value = 85;
 
-  osc.connect(filter);
-  filter.connect(gain);
-  gain.connect(audioState.masterGain);
-  osc.start();
+  const rumble = ctx.createOscillator();
+  rumble.type = "square";
+  rumble.frequency.value = 42;
+  rumble.detune.value = -6;
 
-  slot.osc = osc;
-  slot.gain = gain;
+  const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < noiseData.length; i++) noiseData[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource();
+  noise.buffer = noiseBuffer;
+  noise.loop = true;
+
+  const engineGain = ctx.createGain();
+  engineGain.gain.value = 0;
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.value = 0;
+
+  tone.connect(filter);
+  rumble.connect(filter);
+  filter.connect(engineGain);
+  noise.connect(noiseGain);
+  engineGain.connect(audioState.masterGain);
+  noiseGain.connect(audioState.masterGain);
+
+  tone.start();
+  rumble.start();
+  noise.start();
+
+  slot.osc = tone;
+  slot.rumble = rumble;
+  slot.noise = noise;
+  slot.filter = filter;
+  slot.gain = engineGain;
+  slot.noiseGain = noiseGain;
 }
 
 function unlockAudio() {
@@ -1331,19 +1481,38 @@ function playVictoryAudio(playerId) {
 function updateCarEngineAudio(state, dt) {
   if (!audioState.unlocked) return;
   const slot = audioState.carSounds[state.playerId];
-  if (!slot || !slot.osc || !slot.gain || !audioState.ctx) return;
+  if (!slot || !slot.osc || !slot.gain || !slot.rumble || !slot.noiseGain || !slot.filter || !audioState.ctx) return;
 
   const speedRatio = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
   const controls = getControls(state.playerId);
   const throttleBoost = controls.gasPressed ? 0.18 : 0;
-  const targetFreq = 90 + speedRatio * 220 + throttleBoost * 120;
-  const targetGain = raceLocked ? 0.0001 : 0.03 + speedRatio * 0.08 + throttleBoost * 0.04;
+  const slipFactor = Math.min(1, Math.abs(state.physics.driftYaw) * 0.9 + (controls.handbrakePressed ? 0.3 : 0));
+  const targetFreq = 70 + speedRatio * 210 + throttleBoost * 130 + slipFactor * 45;
+  const targetGain = raceLocked ? 0.0001 : 0.02 + speedRatio * 0.1 + throttleBoost * 0.06;
+  const targetNoiseGain = raceLocked ? 0.0001 : 0.008 + speedRatio * 0.02 + slipFactor * 0.02;
   const smooth = Math.min(1, dt * 8);
+  const rumbleFreq = 34 + speedRatio * 28;
 
   const currentFreq = slot.osc.frequency.value;
   const currentGain = slot.gain.gain.value;
+  const currentNoiseGain = slot.noiseGain.gain.value;
   slot.osc.frequency.setValueAtTime(currentFreq + (targetFreq - currentFreq) * smooth, audioState.ctx.currentTime);
+  slot.rumble.frequency.setValueAtTime(rumbleFreq, audioState.ctx.currentTime);
   slot.gain.gain.setValueAtTime(currentGain + (targetGain - currentGain) * smooth, audioState.ctx.currentTime);
+  slot.noiseGain.gain.setValueAtTime(currentNoiseGain + (targetNoiseGain - currentNoiseGain) * smooth, audioState.ctx.currentTime);
+  slot.filter.frequency.setValueAtTime(180 + speedRatio * 320 + slipFactor * 100, audioState.ctx.currentTime);
+}
+
+function updateMotionTrail(state) {
+  const trail = state.parts.motionTrail;
+  if (!trail) return;
+  const speedRatio = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
+  const slipRatio = Math.min(1, Math.abs(state.physics.driftYaw) * 0.8 + speedRatio * 0.3);
+  trail.visible = speedRatio > 0.2;
+  trail.position.set(state.physics.x, 0, state.physics.z);
+  trail.rotation.y = state.physics.heading;
+  trail.children[0].material.opacity = 0.04 + slipRatio * 0.08;
+  trail.children[1].material.opacity = 0.03 + slipRatio * 0.06;
 }
 
 function updateLapTracking(state, trackIndex = null) {
@@ -1717,9 +1886,13 @@ function animate() {
       updateLapTracking(state, trackInfo.index);
       updateSkidmarks(state, dt);
       applyVisuals(state, steerInput, dt, handbrakeActive);
+      updateMotionTrail(state);
     }
   } else {
-    for (const state of activeCars) applyVisuals(state, 0, dt, false);
+    for (const state of activeCars) {
+      applyVisuals(state, 0, dt, false);
+      updateMotionTrail(state);
+    }
   }
 
   hudAccumulator += dt;
@@ -1734,6 +1907,8 @@ function animate() {
 
   updateDust(dt);
   updateSparks(dt);
+  updateGrassDebris(dt);
+  updateSmoke(dt);
   if (minimapAccumulator >= PERF.minimapInterval) {
     drawMinimap();
     minimapAccumulator = 0;
@@ -1776,6 +1951,11 @@ function applyVisuals(state, steerInput, dt, handbrakeActive) {
     const speedFactor = Math.min(1, Math.abs(state.physics.speed) / PHYSICS_PARAMS.maxSpeed);
     state.parts.shadowBlob.material.opacity = 0.24 + speedFactor * 0.16;
   }
+
+  state.parts.group.children.forEach((child) => {
+    if (child && child.castShadow !== undefined) child.castShadow = true;
+    if (child && child.receiveShadow !== undefined) child.receiveShadow = true;
+  });
 
   const visualSteerAngle = steerInput * 0.5;
   frontWheelPivots.forEach((pivot) => (pivot.rotation.y = visualSteerAngle));
