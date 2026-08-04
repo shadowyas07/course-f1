@@ -16,6 +16,7 @@
  */
 
 import * as THREE from "./vendor/three.module.min.js";
+import { GLTFLoader } from "./vendor/GLTFLoader.js";
 import { buildSpaTrack } from "./track-spa.js";
 
 // ============================================================
@@ -236,6 +237,45 @@ function initializeSpaTrack(sceneRef) {
   };
 
   return spaTrack;
+}
+
+async function loadTrackGlbVisual(sceneRef, bounds) {
+  const loader = new GLTFLoader();
+  try {
+    const gltf = await loader.loadAsync("assets/tracks/race-track-23mb/source/track.glb");
+    const model = gltf.scene;
+
+    model.traverse((obj) => {
+      if (!obj.isMesh) return;
+      obj.castShadow = false;
+      obj.receiveShadow = true;
+      if (obj.material) {
+        obj.material.side = THREE.DoubleSide;
+      }
+    });
+
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+
+    const targetX = Math.max(10, (bounds.maxX - bounds.minX) * 1.04);
+    const targetZ = Math.max(10, (bounds.maxZ - bounds.minZ) * 1.04);
+    const sx = targetX / Math.max(0.001, size.x);
+    const sz = targetZ / Math.max(0.001, size.z);
+    const scale = Math.min(sx, sz);
+    model.scale.setScalar(scale);
+
+    model.position.x = bounds.centerX - center.x * scale;
+    model.position.z = bounds.centerZ - center.z * scale;
+    model.position.y = 0.02 - box.min.y * scale;
+
+    sceneRef.add(model);
+    console.log("[track] GLB piste chargee:", "assets/tracks/race-track-23mb/source/track.glb");
+  } catch (error) {
+    console.warn("[track] Echec chargement GLB, fallback piste procedurale.", error);
+  }
 }
 
 const PERF = {
@@ -800,6 +840,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 initializeSpaTrack(scene);
+loadTrackGlbVisual(scene, TRACK_BOUNDS);
 scene.add(buildScenery());
 
 const skidMarksGroup = new THREE.Group();
