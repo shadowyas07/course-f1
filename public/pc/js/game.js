@@ -138,6 +138,12 @@ for (let i = 0; i < TRACK_SAMPLES; i++) {
   centerPoints.push(trackPointAt((i / TRACK_SAMPLES) * TRACK.perimeter));
 }
 
+const PERF = {
+  hudInterval: 1 / 12,
+  minimapInterval: 1 / 15,
+  trackSearchRange: 28,
+};
+
 // ============================================================
 // Géométrie du circuit
 // ============================================================
@@ -244,12 +250,12 @@ function buildTree() {
   const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2d6a2d, roughness: 0.9 });
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, 1.6, 6), trunkMat);
   trunk.position.y = 0.8;
-  trunk.castShadow = true;
+  trunk.castShadow = false;
   tree.add(trunk);
   [1.6, 1.2, 0.8].forEach((r, i) => {
     const leaf = new THREE.Mesh(new THREE.ConeGeometry(r, 1.6, 7), leavesMat);
     leaf.position.y = 1.6 + i * 1.05;
-    leaf.castShadow = true;
+    leaf.castShadow = false;
     tree.add(leaf);
   });
   return tree;
@@ -426,7 +432,7 @@ function buildCar(bodyColor) {
 
 const canvas = document.getElementById("game-canvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 if ("physicallyCorrectLights" in renderer) renderer.physicallyCorrectLights = true;
@@ -489,16 +495,31 @@ const BASE_FOV = 65;
 const camera1 = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 1000);
 const camera2 = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.1, 1000);
 
+function getSelectedMode() {
+  return window.selectedMode || "duel";
+}
+
+function isSoloMode() {
+  const mode = getSelectedMode();
+  return mode === "solo-timed" || mode === "solo-free";
+}
+
 function onResize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  const halfW = w / 2;
-  camera1.aspect = halfW / h;
+  const solo = isSoloMode();
+  const viewW = solo ? w : w / 2;
+
+  camera1.aspect = viewW / h;
   camera1.updateProjectionMatrix();
-  camera2.aspect = halfW / h;
-  camera2.updateProjectionMatrix();
+
+  if (!solo) {
+    camera2.aspect = viewW / h;
+    camera2.updateProjectionMatrix();
+  }
+
   renderer.setSize(w, h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, solo ? 1.5 : 1.2));
 }
 window.addEventListener("resize", onResize);
 onResize();
@@ -508,7 +529,7 @@ scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x6d9e5f, 0.95));
 const sunLight = new THREE.DirectionalLight(0xfff0d0, 2.2);
 sunLight.position.set(80, 120, 40);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(3072, 3072);
+sunLight.shadow.mapSize.set(2048, 2048);
 sunLight.shadow.camera.left = -140;
 sunLight.shadow.camera.right = 140;
 sunLight.shadow.camera.top = 140;
@@ -549,6 +570,7 @@ const dustGeo = new THREE.BufferGeometry();
 const dustPositions = new Float32Array(DUST_COUNT * 3);
 const dustVelocities = new Array(DUST_COUNT).fill(null).map(() => new THREE.Vector3());
 const dustLife = new Float32Array(DUST_COUNT);
+let dustNeedsUpload = false;
 for (let i = 0; i < DUST_COUNT; i++) dustPositions[i * 3 + 1] = -100;
 dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
 const dustMat = new THREE.PointsMaterial({ color: 0xcabf9a, size: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
@@ -565,22 +587,29 @@ function spawnDust(x, z, count) {
     dustVelocities[i].set((Math.random() - 0.5) * 1.5, 1 + Math.random() * 1.2, (Math.random() - 0.5) * 1.5);
     dustLife[i] = 0.6 + Math.random() * 0.4;
   }
+  dustNeedsUpload = true;
 }
 
 function updateDust(dt) {
+  let dirty = false;
   for (let i = 0; i < DUST_COUNT; i++) {
     if (dustLife[i] <= 0) continue;
     dustLife[i] -= dt;
     if (dustLife[i] <= 0) {
       dustPositions[i * 3 + 1] = -100;
+      dirty = true;
       continue;
     }
     dustPositions[i * 3] += dustVelocities[i].x * dt;
     dustPositions[i * 3 + 1] += dustVelocities[i].y * dt;
     dustPositions[i * 3 + 2] += dustVelocities[i].z * dt;
     dustVelocities[i].y -= 2.5 * dt;
+    dirty = true;
   }
-  dustGeo.attributes.position.needsUpdate = true;
+  if (dirty || dustNeedsUpload) {
+    dustGeo.attributes.position.needsUpdate = true;
+    dustNeedsUpload = false;
+  }
 }
 
 // ============================================================
@@ -603,7 +632,7 @@ const PHYSICS_PARAMS = {
  * Trouve le point le plus proche de la ligne centrale, la distance latérale
  * signée, la normale au circuit à cet endroit, et si on est hors piste.
  */
-function analyzeTrackPosition(x, z) {
+function analyzeTrackPositionFull(x, z) {
   let bestIndex = 0;
   let bestDistSq = Infinity;
   for (let i = 0; i < centerPoints.length; i++) {
@@ -619,6 +648,42 @@ function analyzeTrackPosition(x, z) {
   const p = centerPoints[bestIndex];
   const next = centerPoints[(bestIndex + 1) % centerPoints.length];
   const prev = centerPoints[(bestIndex - 1 + centerPoints.length) % centerPoints.length];
+  const tx = next.x - prev.x;
+  const tz = next.z - prev.z;
+  const len = Math.hypot(tx, tz) || 1;
+  const nx = -tz / len;
+  const nz = tx / len;
+  const lateral = (x - p.x) * nx + (z - p.z) * nz;
+  const offTrack = Math.abs(lateral) > WALL_BOUNDARY;
+  return { index: bestIndex, lateral, offTrack, nx, nz, px: p.x, pz: p.z };
+}
+
+function analyzeTrackPositionFast(x, z, guessIndex = 0) {
+  const n = centerPoints.length;
+  const range = PERF.trackSearchRange;
+  let bestIndex = ((guessIndex % n) + n) % n;
+  let bestDistSq = Infinity;
+
+  for (let k = -range; k <= range; k++) {
+    const i = (bestIndex + k + n) % n;
+    const p = centerPoints[i];
+    const dx = x - p.x;
+    const dz = z - p.z;
+    const distSq = dx * dx + dz * dz;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestIndex = i;
+    }
+  }
+
+  // Si la recherche locale échoue (ex: gros teleport), fallback robuste.
+  if (bestDistSq > 900) {
+    return analyzeTrackPositionFull(x, z);
+  }
+
+  const p = centerPoints[bestIndex];
+  const next = centerPoints[(bestIndex + 1) % n];
+  const prev = centerPoints[(bestIndex - 1 + n) % n];
   const tx = next.x - prev.x;
   const tz = next.z - prev.z;
   const len = Math.hypot(tx, tz) || 1;
@@ -648,6 +713,7 @@ function createCarState(playerId, bodyColor, startX, startZ) {
       prevSampleIndex: 0,
       finished: false,
     },
+    uiCache: { speed: "", lap: "", time: "", best: "" },
     camera: playerId === 1 ? camera1 : camera2,
     currentCamPos: new THREE.Vector3(startX, 3.6, startZ - 8),
   };
@@ -656,6 +722,11 @@ function createCarState(playerId, bodyColor, startX, startZ) {
 const car1 = createCarState(1, 0xff3b3b, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
 const car2 = createCarState(2, 0x3b7dff, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
 const cars = [car1, car2];
+const soloCars = [car1];
+
+function getActiveCars() {
+  return isSoloMode() ? soloCars : cars;
+}
 
 function createShadowBlob() {
   const size = 128;
@@ -683,6 +754,18 @@ for (const state of cars) {
   scene.add(state.parts.shadowBlob);
 }
 
+function applyModeVisualState() {
+  const solo = isSoloMode();
+  car2.parts.group.visible = !solo;
+  if (car2.parts.shadowBlob) car2.parts.shadowBlob.visible = !solo;
+}
+
+window.addEventListener("mode-changed", () => {
+  applyModeVisualState();
+  onResize();
+});
+applyModeVisualState();
+
 function getControls(playerId) {
   const fallback = { steerAngle: 0, gasPressed: false, brakePressed: false };
   if (playerId === 2) return window.carControls2 || fallback;
@@ -693,7 +776,7 @@ function updateCarPhysics(state, dt, wallMode) {
   const controls = getControls(state.playerId);
   const physics = state.physics;
 
-  let trackInfo = analyzeTrackPosition(physics.x, physics.z);
+  let trackInfo = analyzeTrackPositionFast(physics.x, physics.z, state.race.prevSampleIndex);
   let maxSpeedNow = PHYSICS_PARAMS.maxSpeed;
   if (!wallMode && trackInfo.offTrack) {
     maxSpeedNow = PHYSICS_PARAMS.maxSpeed * PHYSICS_PARAMS.grassMaxSpeedFactor;
@@ -731,7 +814,7 @@ function updateCarPhysics(state, dt, wallMode) {
 
   // --- Limites de terrain ---
   if (wallMode) {
-    const info2 = analyzeTrackPosition(physics.x, physics.z);
+    const info2 = analyzeTrackPositionFast(physics.x, physics.z, trackInfo.index);
     if (Math.abs(info2.lateral) > WALL_BOUNDARY) {
       const clamped = Math.sign(info2.lateral) * WALL_BOUNDARY;
       physics.x = info2.px + info2.nx * clamped;
@@ -881,9 +964,9 @@ function updateCarEngineAudio(state, dt) {
   slot.gain.gain.setValueAtTime(currentGain + (targetGain - currentGain) * smooth, audioState.ctx.currentTime);
 }
 
-function updateLapTracking(state) {
+function updateLapTracking(state, trackIndex = null) {
   const n = TRACK_SAMPLES;
-  const idx = analyzeTrackPosition(state.physics.x, state.physics.z).index;
+  const idx = trackIndex == null ? analyzeTrackPositionFast(state.physics.x, state.physics.z, state.race.prevSampleIndex).index : trackIndex;
   const wasNearEnd = state.race.prevSampleIndex > n * 0.85;
   const isNearStart = idx < n * 0.15;
   if (wasNearEnd && isNearStart && state.physics.speed > 0) {
@@ -941,8 +1024,11 @@ function updateCarCamera(state, dt) {
 
   const speedRatio = Math.min(1, Math.abs(physics.speed) / PHYSICS_PARAMS.maxSpeed);
   const targetFov = BASE_FOV + speedRatio * 12;
-  state.camera.fov += (targetFov - state.camera.fov) * Math.min(1, dt * 3);
-  state.camera.updateProjectionMatrix();
+  const newFov = state.camera.fov + (targetFov - state.camera.fov) * Math.min(1, dt * 3);
+  if (Math.abs(newFov - state.camera.fov) > 0.02) {
+    state.camera.fov = newFov;
+    state.camera.updateProjectionMatrix();
+  }
 }
 
 // ============================================================
@@ -967,10 +1053,28 @@ const hudRefs = {
 function updateHud(state) {
   const refs = hudRefs[state.playerId];
   if (!refs) return;
-  refs.speed.textContent = String(Math.round(Math.abs(state.physics.speed) * 3.6));
-  refs.lap.textContent = `${Math.min(state.race.lap, raceState.laps)}/${raceState.laps}`;
-  refs.time.textContent = formatTime(raceState.elapsed - state.race.lapStartTime);
-  refs.best.textContent = state.race.bestLapTime != null ? formatTime(state.race.bestLapTime) : "--:--.---";
+
+  const speed = String(Math.round(Math.abs(state.physics.speed) * 3.6));
+  const lap = `${Math.min(state.race.lap, raceState.laps)}/${raceState.laps}`;
+  const time = formatTime(raceState.elapsed - state.race.lapStartTime);
+  const best = state.race.bestLapTime != null ? formatTime(state.race.bestLapTime) : "--:--.---";
+
+  if (state.uiCache.speed !== speed) {
+    refs.speed.textContent = speed;
+    state.uiCache.speed = speed;
+  }
+  if (state.uiCache.lap !== lap) {
+    refs.lap.textContent = lap;
+    state.uiCache.lap = lap;
+  }
+  if (state.uiCache.time !== time) {
+    refs.time.textContent = time;
+    state.uiCache.time = time;
+  }
+  if (state.uiCache.best !== best) {
+    refs.best.textContent = best;
+    state.uiCache.best = best;
+  }
 }
 
 const minimapCanvas = document.getElementById("minimap");
@@ -1017,7 +1121,9 @@ function drawMinimap() {
   minimapCtx.stroke();
 
   drawCarDot(minimapCtx, cx, cy, scale, car1.physics, "#ff5c5c");
-  drawCarDot(minimapCtx, cx, cy, scale, car2.physics, "#4fa3ff");
+  if (!isSoloMode()) {
+    drawCarDot(minimapCtx, cx, cy, scale, car2.physics, "#4fa3ff");
+  }
 }
 
 // ============================================================
@@ -1070,6 +1176,8 @@ function runCountdown() {
  * et que le bouton "Lancer la course" est cliqué.
  */
 window.startRace = function startRace() {
+  const solo = isSoloMode();
+
   unlockAudio();
   raceState.laps = window.raceSettings.laps || 3;
   raceState.wallMode = !!window.raceSettings.wallMode;
@@ -1077,7 +1185,12 @@ window.startRace = function startRace() {
   raceState.running = true;
 
   resetCarState(car1, TRACK.turnRadius - 2.6, -TRACK.straightLength / 2 + 6);
-  resetCarState(car2, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
+  if (!solo) {
+    resetCarState(car2, TRACK.turnRadius + 2.6, -TRACK.straightLength / 2 + 2);
+  }
+
+  applyModeVisualState();
+  onResize();
 
   finishScreen.classList.add("hidden");
   raceLocked = true;
@@ -1085,22 +1198,26 @@ window.startRace = function startRace() {
 };
 
 function finishRace(winnerState) {
+  const solo = isSoloMode();
+
   winnerState.race.finished = true;
   raceState.running = false;
   raceLocked = true;
   playVictoryAudio(winnerState.playerId);
 
   const loser = winnerState.playerId === 1 ? car2 : car1;
-  finishTitle.textContent = `🏁 Joueur ${winnerState.playerId} gagne !`;
+  finishTitle.textContent = solo ? "🏁 Run termine !" : `🏁 Joueur ${winnerState.playerId} gagne !`;
   finishTitle.style.color = winnerState.playerId === 1 ? "#ff5c5c" : "#4fa3ff";
   const bestTimeLabel = window.selectedMode === "solo-timed" && typeof window.getBestTime === "function"
     ? `Meilleur chrono : ${formatTime(window.getBestTime("solo-timed"))}`
     : `Meilleur tour J${winnerState.playerId} : ${formatTime(winnerState.race.bestLapTime)}`;
 
-  finishDetail.textContent =
-    `Temps total : ${formatTime(raceState.elapsed)}\n` +
-    `${bestTimeLabel}\n` +
-    `Meilleur tour J${loser.playerId} : ${formatTime(loser.race.bestLapTime)}`;
+  finishDetail.textContent = solo
+    ? `Temps total : ${formatTime(raceState.elapsed)}\n${bestTimeLabel}`
+    :
+      `Temps total : ${formatTime(raceState.elapsed)}\n` +
+      `${bestTimeLabel}\n` +
+      `Meilleur tour J${loser.playerId} : ${formatTime(loser.race.bestLapTime)}`;
   rematchBtn.textContent = "🔁 Rejouer";
   finishScreen.classList.remove("hidden");
 }
@@ -1109,6 +1226,7 @@ function finishRace(winnerState) {
  * Abandon : si un joueur se déconnecte en pleine course, l'autre gagne par forfait.
  */
 window.onPlayerLeftDuringRace = function onPlayerLeftDuringRace(player) {
+  if (isSoloMode()) return;
   if (!raceState.running || raceLocked) return;
   const winner = player === 1 ? car2 : car1;
   raceState.running = false;
@@ -1143,37 +1261,54 @@ rematchBtn.addEventListener("click", () => {
 // ============================================================
 
 const clock = new THREE.Clock();
+let hudAccumulator = 0;
+let minimapAccumulator = 0;
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.1);
+  const activeCars = getActiveCars();
 
   if (!raceLocked) {
     raceState.elapsed += dt;
-    for (const state of cars) {
-      const { steerInput } = updateCarPhysics(state, dt, raceState.wallMode);
-      updateLapTracking(state);
+    for (const state of activeCars) {
+      const { steerInput, trackInfo } = updateCarPhysics(state, dt, raceState.wallMode);
+      updateLapTracking(state, trackInfo.index);
       applyVisuals(state, steerInput, dt);
     }
   } else {
-    for (const state of cars) applyVisuals(state, 0, dt);
+    for (const state of activeCars) applyVisuals(state, 0, dt);
   }
 
-  for (const state of cars) {
+  hudAccumulator += dt;
+  minimapAccumulator += dt;
+
+  for (const state of activeCars) {
     updateCarCamera(state, dt);
-    updateHud(state);
+    if (hudAccumulator >= PERF.hudInterval) updateHud(state);
     updateCarEngineAudio(state, dt);
   }
+  if (hudAccumulator >= PERF.hudInterval) hudAccumulator = 0;
+
   updateDust(dt);
-  drawMinimap();
+  if (minimapAccumulator >= PERF.minimapInterval) {
+    drawMinimap();
+    minimapAccumulator = 0;
+  }
 
-  renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
-  renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
-  renderer.render(scene, camera1);
+  if (isSoloMode()) {
+    renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+    renderer.setScissor(0, 0, window.innerWidth, window.innerHeight);
+    renderer.render(scene, camera1);
+  } else {
+    renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight);
+    renderer.setScissor(0, 0, window.innerWidth / 2, window.innerHeight);
+    renderer.render(scene, camera1);
 
-  renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
-  renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
-  renderer.render(scene, camera2);
+    renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+    renderer.setScissor(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight);
+    renderer.render(scene, camera2);
+  }
 }
 
 function applyVisuals(state, steerInput, dt) {
