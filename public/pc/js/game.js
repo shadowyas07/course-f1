@@ -751,6 +751,7 @@ function updateSkidmarks(state, dt) {
     state.skidState.cooldown -= dt;
     if (state.skidState.cooldown <= 0) {
       createSkidmark(state.skidState.lastPoint, worldPoint);
+      spawnSmoke(worldPoint.x, worldPoint.z, 5 + Math.floor(speed / 10));
       state.skidState.cooldown = 0.045;
     }
   } else {
@@ -776,7 +777,9 @@ let dustSpawnScale = 1;
 for (let i = 0; i < DUST_COUNT; i++) dustPositions[i * 3 + 1] = -100;
 dustGeo.setAttribute("position", new THREE.BufferAttribute(dustPositions, 3));
 const dustMat = new THREE.PointsMaterial({ color: 0xcabf9a, size: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
-scene.add(new THREE.Points(dustGeo, dustMat));
+const dustPoints = new THREE.Points(dustGeo, dustMat);
+dustPoints.frustumCulled = false;
+scene.add(dustPoints);
 
 const grassCount = 120;
 const grassGeo = new THREE.BufferGeometry();
@@ -787,7 +790,9 @@ let grassNeedsUpload = false;
 for (let i = 0; i < grassCount; i++) grassPositions[i * 3 + 1] = -100;
 grassGeo.setAttribute("position", new THREE.BufferAttribute(grassPositions, 3));
 const grassMat = new THREE.PointsMaterial({ color: 0x9f8a63, size: 0.22, transparent: true, opacity: 0.9, depthWrite: false });
-scene.add(new THREE.Points(grassGeo, grassMat));
+const grassPoints = new THREE.Points(grassGeo, grassMat);
+grassPoints.frustumCulled = false;
+scene.add(grassPoints);
 
 const smokeCount = 520;
 const smokeGeo = new THREE.BufferGeometry();
@@ -805,7 +810,10 @@ const smokeMat = new THREE.PointsMaterial({
   depthWrite: false,
   depthTest: false,
 });
-scene.add(new THREE.Points(smokeGeo, smokeMat));
+const smokePoints = new THREE.Points(smokeGeo, smokeMat);
+smokePoints.frustumCulled = false;
+smokePoints.renderOrder = 20;
+scene.add(smokePoints);
 
 const SPARK_COUNT = 140;
 const sparkGeo = new THREE.BufferGeometry();
@@ -816,7 +824,9 @@ let sparkNeedsUpload = false;
 for (let i = 0; i < SPARK_COUNT; i++) sparkPositions[i * 3 + 1] = -100;
 sparkGeo.setAttribute("position", new THREE.BufferAttribute(sparkPositions, 3));
 const sparkMat = new THREE.PointsMaterial({ color: 0xfef2bf, size: 0.18, transparent: true, opacity: 0.95, depthWrite: false });
-scene.add(new THREE.Points(sparkGeo, sparkMat));
+const sparkPoints = new THREE.Points(sparkGeo, sparkMat);
+sparkPoints.frustumCulled = false;
+scene.add(sparkPoints);
 
 let dustCursor = 0;
 let sparkCursor = 0;
