@@ -305,7 +305,28 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
     model.position.z = bounds.centerZ - center.z;
     model.position.y += 0.03 - box.min.y;
 
+    // Aligne la hauteur sur la vraie trajectoire: on projette des rayons vers le bas
+    // depuis la centerline et on cale le modele sur la mediane des impacts.
     model.updateMatrixWorld(true);
+    const raycaster = new THREE.Raycaster();
+    const down = new THREE.Vector3(0, -1, 0);
+    const hitYs = [];
+    const probeCount = 42;
+    const step = Math.max(1, Math.floor(centerPoints.length / probeCount));
+    for (let i = 0; i < centerPoints.length; i += step) {
+      const p = centerPoints[i];
+      raycaster.set(new THREE.Vector3(p.x, 600, p.z), down);
+      const hits = raycaster.intersectObject(model, true);
+      if (hits.length > 0) hitYs.push(hits[0].point.y);
+    }
+
+    if (hitYs.length >= 8) {
+      hitYs.sort((a, b) => a - b);
+      const medianY = hitYs[Math.floor(hitYs.length / 2)];
+      model.position.y += 0.03 - medianY;
+      model.updateMatrixWorld(true);
+    }
+
     box = new THREE.Box3().setFromObject(model);
     const ySpan = box.max.y - box.min.y;
     console.log("[track] GLB orientation/fit:", {
