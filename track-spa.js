@@ -11,11 +11,12 @@ const DEFAULTS = {
   sampleCount: 600,
   addGround: true,
   elevationScale: 0,   // 0 = flat mode (recommandé pour la physique)
-  baseHeight: 0,
+  baseHeight: 0.06,
   checkpointEvery: 20, // 1 checkpoint tous les N samples
   debug: false,
-  radius: 150,         // rayon global du tracé
-  segments: 26,         // nb de points de contrôle du tracé
+  layoutScale: 1.0,
+  layoutOffsetX: 0,
+  layoutOffsetZ: 0,
 };
 
 // ---------- Helpers ----------
@@ -32,38 +33,37 @@ function resolveOptions(options) {
     baseHeight: typeof o.baseHeight === 'number' ? o.baseHeight : DEFAULTS.baseHeight,
     checkpointEvery: Number.isInteger(o.checkpointEvery) && o.checkpointEvery > 2 ? o.checkpointEvery : DEFAULTS.checkpointEvery,
     debug: !!o.debug,
-    radius: o.radius > 0 ? o.radius : DEFAULTS.radius,
-    segments: Number.isInteger(o.segments) && o.segments >= 8 ? o.segments : DEFAULTS.segments,
+    layoutScale: typeof o.layoutScale === 'number' && o.layoutScale > 0 ? o.layoutScale : DEFAULTS.layoutScale,
+    layoutOffsetX: typeof o.layoutOffsetX === 'number' ? o.layoutOffsetX : DEFAULTS.layoutOffsetX,
+    layoutOffsetZ: typeof o.layoutOffsetZ === 'number' ? o.layoutOffsetZ : DEFAULTS.layoutOffsetZ,
   };
 }
 
-// ---------- Génération de la forme du tracé (garantie sans auto-croisement) ----------
-// Le rayon est une fonction lisse (basse fréquence) de l'angle theta -> courbe
-// "étoilée" simple par construction. Une mise à l'échelle anisotrope (X/Z)
-// préserve cette propriété (transformation linéaire = pas de croisement introduit).
-const ELONGATION_X = 1.35; // allonge la ligne droite (esprit "Kemmel straight")
-const ELONGATION_Z = 0.95;
+// ---------- Génération de la forme du tracé (Spa-like explicite) ----------
+// Layout stylisé basé sur les virages emblématiques, pour éviter toute forme aléatoire.
+const SPA_LAYOUT_POINTS = [
+  { x: 0, z: 0 },
+  { x: -18, z: 34 },
+  { x: -9, z: 92 },
+  { x: 7, z: 132 },
+  { x: 64, z: 206 },
+  { x: 126, z: 236 },
+  { x: 154, z: 214 },
+  { x: 168, z: 172 },
+  { x: 204, z: 124 },
+  { x: 232, z: 74 },
+  { x: 246, z: 22 },
+  { x: 232, z: -42 },
+  { x: 152, z: -98 },
+  { x: 60, z: -72 },
+  { x: 20, z: -28 },
+];
 
-function radiusAt(theta, baseRadius) {
-  const bumps =
-    Math.sin(theta * 2.0 + 0.6) * 0.28 +
-    Math.sin(theta * 3.0 + 2.1) * 0.16 +
-    Math.sin(theta * 5.0 + 1.2) * 0.08;
-  const factor = clamp(1 + bumps * 0.5, 0.55, 1.35); // borne la variation -> pas de croisement
-  return baseRadius * factor;
-}
-
-function generateControlPoints(segments, baseRadius) {
-  const pts = [];
-  for (let i = 0; i < segments; i++) {
-    const theta = (i / segments) * Math.PI * 2;
-    const r = radiusAt(theta, baseRadius);
-    pts.push({
-      x: Math.cos(theta) * r * ELONGATION_X,
-      z: Math.sin(theta) * r * ELONGATION_Z,
-    });
-  }
-  return pts;
+function generateControlPoints(layoutScale, offsetX, offsetZ) {
+  return SPA_LAYOUT_POINTS.map((p) => ({
+    x: p.x * layoutScale + offsetX,
+    z: p.z * layoutScale + offsetZ,
+  }));
 }
 
 // ---------- Relief (flat mode par défaut) ----------
@@ -383,8 +383,8 @@ function addDebugHelpers(scene, THREE, centerPoints, checkpoints) {
 export function buildSpaTrack(scene, THREE, options = {}) {
   const cfg = resolveOptions(options);
 
-  // 1. Tracé (forme "étoilée" -> pas d'auto-croisement possible)
-  const rawPts = generateControlPoints(cfg.segments, cfg.radius);
+  // 1. Tracé Spa-like explicite
+  const rawPts = generateControlPoints(cfg.layoutScale, cfg.layoutOffsetX, cfg.layoutOffsetZ);
   const curve = new THREE.CatmullRomCurve3(
     rawPts.map(p => new THREE.Vector3(p.x, 0, p.z)),
     true, 'catmullrom', 0.5
