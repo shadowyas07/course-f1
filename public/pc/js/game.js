@@ -250,6 +250,13 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
   try {
     const gltf = await loader.loadAsync("assets/tracks/race-track-23mb/source/track.glb");
     const model = gltf.scene;
+    const glbTune = {
+      scale: 1,
+      yaw: 0,
+      offsetX: 0,
+      offsetY: 0,
+      offsetZ: 0,
+    };
 
     model.traverse((obj) => {
       if (!obj.isMesh) return;
@@ -290,20 +297,19 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
     box.getSize(size);
     box.getCenter(center);
 
-    const targetX = Math.max(10, bounds.maxX - bounds.minX);
-    const targetZ = Math.max(10, bounds.maxZ - bounds.minZ);
-    const sx = targetX / Math.max(0.001, size.x);
-    const sz = targetZ / Math.max(0.001, size.z);
-    const scale = Math.min(sx, sz);
+    // Respecte l'echelle du GLB (circuit exact) au lieu de l'etirer sur la piste procedurale.
+    const scale = glbTune.scale;
     model.scale.setScalar(scale);
+    model.rotation.y += glbTune.yaw;
 
     model.updateMatrixWorld(true);
     box = new THREE.Box3().setFromObject(model);
     box.getCenter(center);
 
-    model.position.x = bounds.centerX - center.x;
-    model.position.z = bounds.centerZ - center.z;
-    model.position.y += 0.03 - box.min.y;
+    // On centre horizontalement pour le rapprocher du gameplay actuel, sans deformer.
+    model.position.x = bounds.centerX - center.x + glbTune.offsetX;
+    model.position.z = bounds.centerZ - center.z + glbTune.offsetZ;
+    model.position.y += 0.03 - box.min.y + glbTune.offsetY;
 
     // Aligne la hauteur sur la vraie trajectoire: on projette des rayons vers le bas
     // depuis la centerline et on cale le modele sur la mediane des impacts.
@@ -333,6 +339,7 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
       rx: best.rx,
       rz: best.rz,
       scale,
+      yaw: glbTune.yaw,
       minY: box.min.y,
       maxY: box.max.y,
       ySpan,
