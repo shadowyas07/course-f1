@@ -28,9 +28,9 @@ const qHeading = new THREE.Quaternion();
 const CAR_RIDE_HEIGHT = 0.28;
 
 function getRoadHitAt(x, z) {
-  if (!roadCollisionTargets.length) return null;
+  if (!roadMesh) return null;
   roadRaycaster.set(new THREE.Vector3(x, 700, z), roadDown);
-  const hits = roadRaycaster.intersectObjects(roadCollisionTargets, true);
+  const hits = roadRaycaster.intersectObject(roadMesh, false);
   if (!hits.length) return null;
   const hit = hits[0];
   const normal = hit.face
@@ -283,6 +283,7 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
     model.traverse((obj) => {
       if (!obj.isMesh) return;
       meshCandidates.push(obj);
+      console.log("Mesh trouvé :", obj.name);
       obj.castShadow = false;
       obj.receiveShadow = true;
       if (obj.material) {
@@ -375,18 +376,17 @@ async function loadTrackGlbVisual(sceneRef, bounds) {
 
     sceneRef.add(model);
     if (roadCandidates.length > 0) {
-      roadCollisionTargets = roadCandidates;
+      roadMesh = roadCandidates[0];
     } else {
-      roadCollisionTargets = meshCandidates
+      roadMesh = meshCandidates
         .slice()
         .sort((a, b) => {
           const ca = a.geometry?.attributes?.position?.count || 0;
           const cb = b.geometry?.attributes?.position?.count || 0;
           return cb - ca;
-        })
-        .slice(0, Math.min(6, meshCandidates.length));
+        })[0] || null;
     }
-    roadMesh = roadCollisionTargets[0] || null;
+    roadCollisionTargets = roadMesh ? [roadMesh] : [];
 
     console.log("[track] GLB piste chargee:", "assets/tracks/race-track-23mb/source/track.glb");
     console.log("[track] road meshes utilises:", roadCollisionTargets.map((m) => m.name || m.uuid));
@@ -956,7 +956,7 @@ const ground = new THREE.Mesh(
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
-initializeSpaTrack(scene);
+// initializeSpaTrack(scene); // Desactive: on n'affiche plus ni n'utilise la carte procedurale dans la scene.
 loadTrackGlbVisual(scene, TRACK_BOUNDS);
 scene.add(buildScenery());
 
@@ -1485,8 +1485,12 @@ function updateCarPhysics(state, dt, wallMode) {
   const physics = state.physics;
 
   let trackInfo = { index: state.race.prevSampleIndex || 0, offTrack: false };
-  const preHit = getRoadHitAt(physics.x, physics.z);
-  const onRoad = !!preHit;
+  const carPosition = state.parts?.group?.position?.clone?.() || new THREE.Vector3(physics.x, physics.y || 0, physics.z);
+  const preRayOrigin = carPosition.clone();
+  preRayOrigin.y += 5.0;
+  roadRaycaster.set(preRayOrigin, roadDown);
+  const preIntersects = roadMesh ? roadRaycaster.intersectObject(roadMesh, false) : [];
+  const onRoad = preIntersects.length > 0;
   const maxSpeedNow = onRoad ? PHYSICS_PARAMS.maxSpeed : PHYSICS_PARAMS.maxSpeed * PHYSICS_PARAMS.grassMaxSpeedFactor;
 
   if (controls.gasPressed) {
@@ -1567,13 +1571,22 @@ function updateCarPhysics(state, dt, wallMode) {
   physics.x += physics.velocity.x * dt;
   physics.z += physics.velocity.z * dt;
 
-  const hit = getRoadHitAt(physics.x, physics.z);
-  const offTrack = !hit;
+  const rayOrigin = carPosition.clone();
+  rayOrigin.set(physics.x, physics.y || 0, physics.z);
+  rayOrigin.y += 5.0;
+  roadRaycaster.set(rayOrigin, roadDown);
+  const intersects = roadMesh ? roadRaycaster.intersectObject(roadMesh, false) : [];
+  const offTrack = intersects.length === 0;
   trackInfo.offTrack = offTrack;
 
-  if (hit) {
-    physics.y = hit.point.y + CAR_RIDE_HEIGHT;
-    state.surfaceNormal.copy(hit.normal);
+  if (intersects.length > 0) {
+    const hit = intersects[0];
+    physics.y = hit.point.y + 0.1;
+    if (hit.face) {
+      state.surfaceNormal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
+    } else {
+      state.surfaceNormal.set(0, 1, 0);
+    }
   } else {
     state.surfaceNormal.set(0, 1, 0);
     physics.y = physics.y || 0;
